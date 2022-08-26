@@ -60,12 +60,13 @@ class L2P(nn.Module):
         x = self.classifier(x)
         if self.training:
             x = x + self.past_class
-        x = F.softmax(x, dim = -1)
+        if not self.training:
+            x = F.softmax(x, dim = -1)
         self.simmilairty = _simmilarity.sum() / x.size()[0]
         return x
         
     def loss_fn(self, output, target):
-        return nn.CrossEntropyLoss(label_smoothing=0.1)(output, target) - 0.5 * self.simmilairty
+        return F.cross_entropy(output, target) - 0.5 * self.simmilairty
 
     def accuracy(self, output, target):
         return (output.argmax(dim = 1) == target).sum()/ output.size()[0]
