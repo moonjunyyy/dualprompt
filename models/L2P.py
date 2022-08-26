@@ -66,7 +66,7 @@ class L2P(nn.Module):
         return x
         
     def loss_fn(self, output, target):
-        return nn.CrossEntropyLoss(label_smoothing=0.1)(output, target) + 0.5 * self.simmilairty
+        return nn.CrossEntropyLoss(label_smoothing=0.1)(output, target) - 0.5 * self.simmilairty
 
     def accuracy(self, output, target):
         return (output.argmax(dim = 1) == target).sum()/ output.size()[0]
