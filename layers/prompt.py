@@ -43,6 +43,7 @@ class Prompt(nn.Module):
         _, mosts    = counts.topk(self.selection_size, largest = True, sorted = True)
         topk        = idx[mosts]
 
+
         if self.training:
             self.counter += topk.bincount(minlength = self.pool_size)
 
