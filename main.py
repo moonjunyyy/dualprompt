@@ -8,17 +8,15 @@ from   torchvision.datasets import CIFAR100
 from models.L2P import L2P
 from utils.trainer_continual import trainer_til
 
-sys.argv
+MODEL_PATH     = "saved/l2p/CIL2"
+DATA_PATH      = "/home/datasets/CIFAR-100/cifar-100-python"
 
-MODEL_PATH     = "saved/l2p/CIL8"
-DATA_PATH      = "/mnt/e/Datasets/CIFAR100/"
-
-batchsize      = 32
+batchsize      = 128
 step_size      = 128
 batch_per_step = step_size // batchsize
 backbone_name  = "vit_base_patch16_224"
 epochs         = 5
-log_interval   = 40
+log_interval   = 20
 pool_size      = 10
 selection_size = 4
 prompt_len     = 10
@@ -27,9 +25,6 @@ num_tasks      = 10
 num_class      = 100
 lr_scheduler   = None
 use_amp        = True
-
-os.environ['CUDA_LAUNCH_BLOCKING'] = "1"
-os.environ["CUDA_VISIBLE_DEVICES"] = "0"
 
 def main():
     transformCifar = transforms.Compose([transforms.Resize   (224),

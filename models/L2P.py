@@ -24,10 +24,8 @@ class L2P(nn.Module):
         self.dimention      = dimention
         
         self.backbone = timm.create_model(backbone_name, pretrained=True)
-        self.add_module('backbone', self.backbone)
         for param in self.backbone.parameters():
             param.requires_grad = False
-        print(self.backbone.no_embed_class)
 
         self.prompt         = Prompt(pool_size, selection_size, prompt_len, dimention)
         self.simmilairty    = 0.0
@@ -43,7 +41,9 @@ class L2P(nn.Module):
         self.past_class = self.past_class.to(next(self.parameters()).device)
 
         x = self.backbone.patch_embed(inputs)
-        x = self.backbone._pos_embed(x)
+        cls_token = self.backbone.cls_token.expand(x.shape[0], -1, -1)
+        x = torch.cat((cls_token, x), dim=1)
+        x = self.backbone.pos_drop(x + self.backbone.pos_embed)
         q = self.backbone.blocks(x)
         q = self.backbone.norm(q)[:, 0, :].clone()
 
