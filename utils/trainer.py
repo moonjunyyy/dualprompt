@@ -121,11 +121,12 @@ class trainer():
                 self.scaler.scale(loss).backward()
                 self._set_metrics(loss.item(), accu.item())
                 
-                _getloss, _getaccu = self._get_metrics(False)
-                print("                                                                                \r",
-                        'Train Epoch: {} [{}/{} ({:.0f}%)]\tLoss: {:.6f}\tAccuracy: {:.6f}'.format(self.epoch, 
-                        (n + 1) *  self.batch_size if (n + 1) *  self.batch_size < len(self.train_dataloader.dataset) else len(self.train_dataloader.dataset)
-                        , len(self.train_dataloader.dataset), 100. * (n + 1) / len(self.train_dataloader), _getloss, _getaccu * 100), end="\r")
+                if n % self.log_interval == self.log_interval - 1 or n == length - 1:
+                    _getloss, _getaccu = self._get_metrics(False)
+                    print("                                                                                \r",
+                            'Train Epoch: {} [{}/{} ({:.0f}%)]\tLoss: {:.6f}\tAccuracy: {:.6f}'.format(self.epoch, 
+                            (n + 1) *  self.batch_size if (n + 1) *  self.batch_size < len(self.train_dataloader.dataset) else len(self.train_dataloader.dataset)
+                            , len(self.train_dataloader.dataset), 100. * (n + 1) / len(self.train_dataloader), _getloss, _getaccu * 100), end="\r")
                         
                 if n % self.step_size    == self.step_size    - 1 or n == length - 1:
                     self.scaler.step(self.optimizer)
@@ -158,13 +159,13 @@ class trainer():
                 accu = self.model.accuracy(inference, targets)
                 self._set_metrics(loss.item(), accu.item())
 
-                _getloss, _getaccu = self._get_metrics(False)
-                print("                                                                               \r",
-                    'Test Epoch: {} [{}/{} ({:.0f}%)]\tLoss: {:.6f}\tAccuracy: {:.6f}'.format(self.epoch, 
-                    (n + 1) *  self.batch_size if (n + 1) *  self.batch_size < len(self.test_dataloader.dataset) else len(self.test_dataloader.dataset),
-                    len(self.test_dataloader.dataset), 100. * (n + 1) / len(self.test_dataloader), _getloss, _getaccu * 100), end="\r")
-            print("")
+    
         _getloss, _getaccu = self._get_metrics()
+        print("                                                                               \r",
+        'Test Epoch: {} [{}/{} ({:.0f}%)]\tLoss: {:.6f}\tAccuracy: {:.6f}'.format(self.epoch, 
+        (n + 1) *  self.batch_size if (n + 1) *  self.batch_size < len(self.test_dataloader.dataset) else len(self.test_dataloader.dataset),
+        len(self.test_dataloader.dataset), 100. * (n + 1) / len(self.test_dataloader), _getloss, _getaccu * 100), end="\r")
+        print("")
         if self.writer is not None:
             self._add_scalar('loss',     _getloss)
             self._add_scalar('accuracy', _getaccu * 100)

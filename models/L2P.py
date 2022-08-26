@@ -24,6 +24,7 @@ class L2P(nn.Module):
         self.dimention      = dimention
         
         self.backbone = timm.create_model(backbone_name, pretrained=True)
+        self.add_module('backbone', self.backbone)
         for param in self.backbone.parameters():
             param.requires_grad = False
 
@@ -41,9 +42,7 @@ class L2P(nn.Module):
         self.past_class = self.past_class.to(next(self.parameters()).device)
 
         x = self.backbone.patch_embed(inputs)
-        cls_token = self.backbone.cls_token.expand(x.shape[0], -1, -1)
-        x = torch.cat((cls_token, x), dim=1)
-        x = self.backbone.pos_drop(x + self.backbone.pos_embed)
+        x = self.backbone._pos_embed(x)
         q = self.backbone.blocks(x)
         q = self.backbone.norm(q)[:, 0, :].clone()
 
@@ -66,7 +65,7 @@ class L2P(nn.Module):
         return x
         
     def loss_fn(self, output, target):
-        return nn.CrossEntropyLoss(label_smoothing=0.1)(output, target) + 0.5 * self.simmilairty
+        return nn.CrossEntropyLoss(label_smoothing=0.1)(output, target) - 0.5 * self.simmilairty
 
     def accuracy(self, output, target):
         return (output.argmax(dim = 1) == target).sum()/ output.size()[0]

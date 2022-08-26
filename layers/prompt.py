@@ -1,4 +1,3 @@
-from itertools import count
 import torch
 import torch.nn as nn
 import torch.nn.functional as F
@@ -31,18 +30,19 @@ class Prompt(nn.Module):
         #self.key    = nn.Parameter(F.normalize(self.key,    p=2, dim=-1))
         #self.prompt = nn.Parameter(F.normalize(self.prompt, p=2, dim=-1))
 
-        match = (1 - F.cosine_similarity(query.unsqueeze(1), self.key, dim = -1))
+        match = F.cosine_similarity(query.unsqueeze(1), self.key, dim = -1)
 
         if self.training:
-            topk    = match
-            #topk    = (match * F.normalize(self.frequency, p=1, dim=-1))
+            #topk    = match
+            topk    = (match * F.normalize(1 / self.frequency, p=1, dim=-1))
         else :
             topk    = match
 
-        _, topk     = topk.topk(self.selection_size, dim = -1, largest = False, sorted = True)
+        _, topk     = topk.topk(self.selection_size, dim = -1, largest = True, sorted = True)
         idx, counts = topk.unique(sorted=True, return_counts=True)
         _, mosts    = counts.topk(self.selection_size, largest = True, sorted = True)
         topk        = idx[mosts]
+
         if self.training:
             self.counter += topk.bincount(minlength = self.pool_size)
 

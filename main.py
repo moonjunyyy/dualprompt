@@ -3,30 +3,35 @@ import sys
 
 import torch.optim as optim
 import torchvision.transforms as transforms
-from   torchvision.datasets import CIFAR100
+from torchvision.datasets import CIFAR100
 
 from models.L2P import L2P
+from utils.argvs import l2p_argvs
 from utils.trainer_continual import trainer_til
 
-MODEL_PATH     = "saved/l2p/CIL2"
-DATA_PATH      = "/home/datasets/CIFAR-100/cifar-100-python"
+os.environ['CUDA_LAUNCH_BLOCKING'] = "1"
+os.environ["CUDA_VISIBLE_DEVICES"] = "0"
 
-batchsize      = 128
-step_size      = 128
-batch_per_step = step_size // batchsize
-backbone_name  = "vit_base_patch16_224"
-epochs         = 5
-log_interval   = 20
-pool_size      = 10
-selection_size = 4
-prompt_len     = 10
-dimention      = 768
-num_tasks      = 10
-num_class      = 100
-lr_scheduler   = None
-use_amp        = True
+def main(**kwargs):
 
-def main():
+    MODEL_PATH     = kwargs["--save-path"]
+    DATA_PATH      = kwargs["--data-path"]
+
+    batchsize      = kwargs["--batchsize"]
+    step_size      = kwargs["--stepsize"]
+    batch_per_step = step_size // batchsize
+    backbone_name  = kwargs["--backbone-name"]
+    epochs         = kwargs["--epochs"]
+    log_interval   = kwargs["--log-interval"]
+    pool_size      = kwargs["--pool-size"]
+    selection_size = kwargs["--selection-size"]
+    prompt_len     = kwargs["--prompt-len"]
+    dimention      = kwargs["--dimention"]
+    num_tasks      = kwargs["--num-tasks"]
+    num_class      = kwargs["--num-class"]
+    lr_scheduler   = kwargs["--lr-scheduler"]
+    use_amp        = kwargs["--use-amp"]
+
     transformCifar = transforms.Compose([transforms.Resize   (224),
                                          transforms.ToTensor ()])
 
@@ -59,5 +64,26 @@ def main():
     train.train()
 
 if __name__ == "__main__":
-    main()
+    for n, name in enumerate(sys.argv):
+        print(n, name)
+        try:
+            if n % 2 == 0:
+                continue
+            l2p_argvs[name] = sys.argv[n+1]
+        except KeyError:
+            print("Unknown argument: {}, pass".format(name)) 
+
+    if   l2p_argvs["--backbone-name"].find('base')  != -1:
+        l2p_argvs ["--dimention"] = 768
+    elif l2p_argvs["--backbone-name"].find('tiny')  != -1:
+        l2p_argvs ["--dimention"] = 192
+    elif l2p_argvs["--backbone-name"].find('small') != -1:
+        l2p_argvs ["--dimention"] = 384
+    elif l2p_argvs["--backbone-name"].find('large') != -1:
+        l2p_argvs ["--dimention"] = 1024
+    else:
+        print("Unknown backbone name: {}".format(l2p_argvs["--backbone-name"]))
+        exit(1)
+    
+    main(**l2p_argvs)
     print("Done")
