@@ -49,10 +49,10 @@ class trainer():
 
         if torch.cuda.is_available() and torch.cuda.device_count() > 0:
             self.device       = torch.device("cuda")
-            self.model        = nn.parallel.data_parallel(model(**kwargs), input, range(torch.cuda.device_count()))
+            self.model        = nn.parallel.data_parallel(model(**kwargs).to(self.device), input, range(torch.cuda.device_count()))
         else :
             self.device       = torch.device("cuda") if torch.cuda.is_available() else torch.device("cpu")
-            self.model        = model(device = self.device, **kwargs)
+            self.model        = model(device = self.device, **kwargs).to(self.device)
 
         if optimizer     is None:        
             self.optimizer    = optim.SGD(self.model.parameters(), lr=0.01, momentum=0.9)
