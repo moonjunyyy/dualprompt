@@ -13,8 +13,10 @@ from utils.trainer import trainer
 
 
 class trainer_til(trainer):
-    def __init__(self,
+    def __init__(
+                 self,
                  model          : nn.Module         = None,
+                 model_args     : dict              = None,
                  train_dataset  : Dataset           = None,
                  test_dataset   : Dataset           = None,
                  batch_size     : int               = 16,
@@ -26,7 +28,9 @@ class trainer_til(trainer):
                  log_freqency   : int               = 10,
                  save_dir       : str               = None,
                  optimizer      : optim.Optimizer   = None,
+                 optimizer_args : dict              = None,
                  lr_scheduler   : _LRScheduler      = None,
+                 lr_schedul_args: dict              = None,
                  use_amp        : bool              = False,
                  **kwargs) -> None:
                   
@@ -56,6 +60,7 @@ class trainer_til(trainer):
             The learning rate scheduler.
         '''
         super().__init__(model,
+                         model_args,
                          train_dataset,
                          test_dataset,
                          batch_size,
@@ -66,7 +71,9 @@ class trainer_til(trainer):
                          log_freqency,
                          save_dir,
                          optimizer,
+                         optimizer_args,
                          lr_scheduler,
+                         lr_schedul_args,
                          use_amp,
                          **kwargs)
 

@@ -1,3 +1,4 @@
+from distutils.log import debug
 from sqlite3 import paramstyle
 import sys
 
@@ -28,6 +29,7 @@ def main(**kwargs):
     num_class      = int(kwargs["--num-class"])
     lr_scheduler   = kwargs["--lr-scheduler"]
     use_amp        = kwargs["--use-amp"]
+    debug          = kwargs["--debug"]
 
     transformCifar = transforms.Compose([transforms.Resize   (224),
                                          transforms.ToTensor ()])
@@ -36,12 +38,13 @@ def main(**kwargs):
     test_dataset  = CIFAR100(DATA_PATH, download=True, train=False, transform=transformCifar)
 
     train = trainer_til( model = L2P,
-                         pool_size = pool_size,
-                         selection_size = selection_size,
-                         prompt_len = prompt_len,
-                         dimention = dimention,
-                         class_num = num_class,
-                         backbone_name = backbone_name,
+                         model_args=
+                            {"pool_size" : pool_size,
+                            "selection_size" : selection_size,
+                            "prompt_len" : prompt_len,
+                            "dimention" : dimention,
+                            "class_num" : num_class,
+                            "backbone_name" : backbone_name},
                          train_dataset = train_dataset,
                          test_dataset = test_dataset,
                          batch_size = batchsize,
@@ -50,11 +53,13 @@ def main(**kwargs):
                          log_freqency = 10,
                          save_dir = MODEL_PATH,
                          optimizer = optim.Adam,
-                         lr = 0.03,
-                         betas=(0.9, 0.999),
+                         optimizer_args =
+                            {"lr"    : 0.03,
+                             "betas" : (0.9, 0.999)},
                          lr_scheduler = None,
-                         use_amp = use_amp)
-    train.cuda()
+                         lr_schedul_args = None,
+                         use_amp = use_amp,
+                         debug = debug)
     train.train()
 
 if __name__ == "__main__":

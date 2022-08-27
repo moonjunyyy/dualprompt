@@ -11,6 +11,7 @@ from torch.utils.tensorboard import SummaryWriter
 class trainer():
     def __init__(self,
                  model          : nn.Module         = None,
+                 model_args     : dict              = None,
                  train_dataset  : Dataset           = None,
                  test_dataset   : Dataset           = None,
                  batch_size     : int               = 16,
@@ -21,8 +22,11 @@ class trainer():
                  log_freqency   : int               = 10,
                  save_dir       : str               = None,
                  optimizer      : optim.Optimizer   = None,
+                 optimizer_args : dict              = None,
                  lr_scheduler   : _LRScheduler      = None,
+                 lr_schedul_args: dict              = None,
                  use_amp        : bool              = False,
+                 debug          : bool              = False,
                  **kwargs) -> None:
         r'''
         Initialize the trainer.
@@ -47,32 +51,35 @@ class trainer():
         if train_dataset is None or test_dataset is None:
             raise ValueError("train_dataset and test_dataset cannot be None.")
 
-        if torch.cuda.is_available() and torch.cuda.device_count() > 0:
+        if torch.cuda.is_available() and torch.cuda.device_count() > 1:
             self.device       = torch.device("cuda")
-            self.model        = nn.parallel.data_parallel(model(device = self.device, **kwargs).to(self.device), input, range(torch.cuda.device_count()))
+            self.model        = nn.DataParallel(model(device = self.device, **model_args).to(self.device), input, range(torch.cuda.device_count()))
         else :
             self.device       = torch.device("cuda") if torch.cuda.is_available() else torch.device("cpu")
-            self.model        = model(device = self.device, **kwargs).to(self.device)
+            self.model        = model(device = self.device, **model_args).to(self.device)
 
         if optimizer     is None:        
             self.optimizer    = optim.SGD(self.model.parameters(), lr=0.01, momentum=0.9)
         else:
-            self.optimizer    = optimizer(self.model.parameters(), **kwargs)
+            self.optimizer    = optimizer(self.model.parameters(), **optimizer_args)
 
         if lr_scheduler  is None:        
             self.lr_scheduler = torch.optim.lr_scheduler.ConstantLR(self.optimizer, 1.0)
         else:
-            self.lr_scheduler = lr_scheduler(self.optimizer, **kwargs)
+            self.lr_scheduler = lr_scheduler(self.optimizer, **lr_schedul_args)
 
         self.batch_size       = batch_size
+
+        self.train_dataset    = train_dataset
+        self.test_dataset     = test_dataset
         self.train_dataloader = DataLoader(train_dataset,
                                            batch_size=batch_size,
                                            num_workers=num_workers,
-                                           shuffle=True)
+                                           shuffle=True, pin_memory_device=self.device)
         self.test_dataloader  = DataLoader(test_dataset,
                                            batch_size=batch_size,
                                            num_workers=num_workers,
-                                           shuffle=False)
+                                           shuffle=False, pin_memory_device=self.device)
 
         self.epoch            = epoch_start
         self.epochs           = epochs
@@ -92,29 +99,12 @@ class trainer():
             self.writer_root  = ""
         else:
             self.writer       = None
-
-    def cpu(self):
-        r'''
-        Move the model to the cpu.
-        '''
-        self.device = torch.device("cpu")
-        self.model  = self.model.device(self.device)
-        return
-
-    def cuda(self):
-        r'''
-        Move the model to the gpu.
-        '''
-        if not torch.cuda.is_available():
-            raise ValueError("Cuda is not available.")
-        self.device = torch.device("cuda")
-        self.model  = self.model.device(self.device)
-        return
+        self._debug = debug
 
     def _train_a_epoch(self, *args, **kwargs):
 
         self.model.train()
-        length   = len(self.train_dataloader)
+        length   = len(self.train_dataloader.dataset)
         interval = length // (self.log_freqency - 1)
 
         for n, batch in enumerate(self.train_dataloader):
@@ -219,8 +209,7 @@ class trainer():
     
     def _print_log(self, name, n, debug = False,**kwawrgs):
         if debug:
-            print('                                                                                                                   ', end = '\r')
-            print('{} Epoch: {} [{}/{} ({:.0f}%)]'.format(name, self.epoch, 
+            print('{} Epoch: {:3d} [{}/{:3d} ({:.0f}%)]'.format(name, self.epoch, 
                 (n + 1) *  self.batch_size if (n + 1) *  self.batch_size < len(self.test_dataloader.dataset) else len(self.test_dataloader.dataset),
                 len(self.test_dataloader.dataset), 100. * (n + 1) / len(self.test_dataloader)),end = "")
             for k,v in self._metrics.items():
@@ -238,6 +227,12 @@ class trainer():
             pass
         
         return
+
+    def _set_writer(self, name):
+        if self.writer is not None:
+            self.writer = SummaryWriter(os.path.join(self.save_dir, name))
+        return
+
     def _set_metrics(self, **kwargs):
         r'''
         Log the metrics of the model.
@@ -263,8 +258,13 @@ class trainer():
         r'''
         Set the writer of the model.
         '''
+        try:
+            i = self.writer_path[tag]
+        except:
+            self.writer_path[tag] = 0
+
         self.writer = SummaryWriter(log_dir = self.save_dir)
-        self.writer.add_scalar(tag + '/' + self.writer_root, scalar, self.writer_path[self.writer_root])
-        self.writer_path[self.writer_root] += 1
+        self.writer.add_scalar(tag, scalar, self.writer_path[tag])
+        self.writer_path[tag] += 1
         return
     

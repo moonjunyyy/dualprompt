@@ -1,470 +1,0 @@
-0 main.py
-1 --data-path
-2 /home/datasets/CIFAR-100/cifar-100-python
-3 --save-path
-4 saved/l2p/CIL_1055
-5 --pool-size
-6 10
-7 --selection-size
-8 5
-9 --prompt-len
-10 5
-11 --batchsize
-12 128
-Files already downloaded and verified
-Files already downloaded and verified
-L2P(
-  (backbone): VisionTransformer(
-    (patch_embed): PatchEmbed(
-      (proj): Conv2d(3, 768, kernel_size=(16, 16), stride=(16, 16))
-      (norm): Identity()
-    )
-    (pos_drop): Dropout(p=0.0, inplace=False)
-    (blocks): Sequential(
-      (0): Block(
-        (norm1): LayerNorm((768,), eps=1e-06, elementwise_affine=True)
-        (attn): Attention(
-          (qkv): Linear(in_features=768, out_features=2304, bias=True)
-          (attn_drop): Dropout(p=0.0, inplace=False)
-          (proj): Linear(in_features=768, out_features=768, bias=True)
-          (proj_drop): Dropout(p=0.0, inplace=False)
-        )
-        (drop_path): Identity()
-        (norm2): LayerNorm((768,), eps=1e-06, elementwise_affine=True)
-        (mlp): Mlp(
-          (fc1): Linear(in_features=768, out_features=3072, bias=True)
-          (act): GELU(approximate=none)
-          (fc2): Linear(in_features=3072, out_features=768, bias=True)
-          (drop): Dropout(p=0.0, inplace=False)
-        )
-      )
-      (1): Block(
-        (norm1): LayerNorm((768,), eps=1e-06, elementwise_affine=True)
-        (attn): Attention(
-          (qkv): Linear(in_features=768, out_features=2304, bias=True)
-          (attn_drop): Dropout(p=0.0, inplace=False)
-          (proj): Linear(in_features=768, out_features=768, bias=True)
-          (proj_drop): Dropout(p=0.0, inplace=False)
-        )
-        (drop_path): Identity()
-        (norm2): LayerNorm((768,), eps=1e-06, elementwise_affine=True)
-        (mlp): Mlp(
-          (fc1): Linear(in_features=768, out_features=3072, bias=True)
-          (act): GELU(approximate=none)
-          (fc2): Linear(in_features=3072, out_features=768, bias=True)
-          (drop): Dropout(p=0.0, inplace=False)
-        )
-      )
-      (2): Block(
-        (norm1): LayerNorm((768,), eps=1e-06, elementwise_affine=True)
-        (attn): Attention(
-          (qkv): Linear(in_features=768, out_features=2304, bias=True)
-          (attn_drop): Dropout(p=0.0, inplace=False)
-          (proj): Linear(in_features=768, out_features=768, bias=True)
-          (proj_drop): Dropout(p=0.0, inplace=False)
-        )
-        (drop_path): Identity()
-        (norm2): LayerNorm((768,), eps=1e-06, elementwise_affine=True)
-        (mlp): Mlp(
-          (fc1): Linear(in_features=768, out_features=3072, bias=True)
-          (act): GELU(approximate=none)
-          (fc2): Linear(in_features=3072, out_features=768, bias=True)
-          (drop): Dropout(p=0.0, inplace=False)
-        )
-      )
-      (3): Block(
-        (norm1): LayerNorm((768,), eps=1e-06, elementwise_affine=True)
-        (attn): Attention(
-          (qkv): Linear(in_features=768, out_features=2304, bias=True)
-          (attn_drop): Dropout(p=0.0, inplace=False)
-          (proj): Linear(in_features=768, out_features=768, bias=True)
-          (proj_drop): Dropout(p=0.0, inplace=False)
-        )
-        (drop_path): Identity()
-        (norm2): LayerNorm((768,), eps=1e-06, elementwise_affine=True)
-        (mlp): Mlp(
-          (fc1): Linear(in_features=768, out_features=3072, bias=True)
-          (act): GELU(approximate=none)
-          (fc2): Linear(in_features=3072, out_features=768, bias=True)
-          (drop): Dropout(p=0.0, inplace=False)
-        )
-      )
-      (4): Block(
-        (norm1): LayerNorm((768,), eps=1e-06, elementwise_affine=True)
-        (attn): Attention(
-          (qkv): Linear(in_features=768, out_features=2304, bias=True)
-          (attn_drop): Dropout(p=0.0, inplace=False)
-          (proj): Linear(in_features=768, out_features=768, bias=True)
-          (proj_drop): Dropout(p=0.0, inplace=False)
-        )
-        (drop_path): Identity()
-        (norm2): LayerNorm((768,), eps=1e-06, elementwise_affine=True)
-        (mlp): Mlp(
-          (fc1): Linear(in_features=768, out_features=3072, bias=True)
-          (act): GELU(approximate=none)
-          (fc2): Linear(in_features=3072, out_features=768, bias=True)
-          (drop): Dropout(p=0.0, inplace=False)
-        )
-      )
-      (5): Block(
-        (norm1): LayerNorm((768,), eps=1e-06, elementwise_affine=True)
-        (attn): Attention(
-          (qkv): Linear(in_features=768, out_features=2304, bias=True)
-          (attn_drop): Dropout(p=0.0, inplace=False)
-          (proj): Linear(in_features=768, out_features=768, bias=True)
-          (proj_drop): Dropout(p=0.0, inplace=False)
-        )
-        (drop_path): Identity()
-        (norm2): LayerNorm((768,), eps=1e-06, elementwise_affine=True)
-        (mlp): Mlp(
-          (fc1): Linear(in_features=768, out_features=3072, bias=True)
-          (act): GELU(approximate=none)
-          (fc2): Linear(in_features=3072, out_features=768, bias=True)
-          (drop): Dropout(p=0.0, inplace=False)
-        )
-      )
-      (6): Block(
-        (norm1): LayerNorm((768,), eps=1e-06, elementwise_affine=True)
-        (attn): Attention(
-          (qkv): Linear(in_features=768, out_features=2304, bias=True)
-          (attn_drop): Dropout(p=0.0, inplace=False)
-          (proj): Linear(in_features=768, out_features=768, bias=True)
-          (proj_drop): Dropout(p=0.0, inplace=False)
-        )
-        (drop_path): Identity()
-        (norm2): LayerNorm((768,), eps=1e-06, elementwise_affine=True)
-        (mlp): Mlp(
-          (fc1): Linear(in_features=768, out_features=3072, bias=True)
-          (act): GELU(approximate=none)
-          (fc2): Linear(in_features=3072, out_features=768, bias=True)
-          (drop): Dropout(p=0.0, inplace=False)
-        )
-      )
-      (7): Block(
-        (norm1): LayerNorm((768,), eps=1e-06, elementwise_affine=True)
-        (attn): Attention(
-          (qkv): Linear(in_features=768, out_features=2304, bias=True)
-          (attn_drop): Dropout(p=0.0, inplace=False)
-          (proj): Linear(in_features=768, out_features=768, bias=True)
-          (proj_drop): Dropout(p=0.0, inplace=False)
-        )
-        (drop_path): Identity()
-        (norm2): LayerNorm((768,), eps=1e-06, elementwise_affine=True)
-        (mlp): Mlp(
-          (fc1): Linear(in_features=768, out_features=3072, bias=True)
-          (act): GELU(approximate=none)
-          (fc2): Linear(in_features=3072, out_features=768, bias=True)
-          (drop): Dropout(p=0.0, inplace=False)
-        )
-      )
-      (8): Block(
-        (norm1): LayerNorm((768,), eps=1e-06, elementwise_affine=True)
-        (attn): Attention(
-          (qkv): Linear(in_features=768, out_features=2304, bias=True)
-          (attn_drop): Dropout(p=0.0, inplace=False)
-          (proj): Linear(in_features=768, out_features=768, bias=True)
-          (proj_drop): Dropout(p=0.0, inplace=False)
-        )
-        (drop_path): Identity()
-        (norm2): LayerNorm((768,), eps=1e-06, elementwise_affine=True)
-        (mlp): Mlp(
-          (fc1): Linear(in_features=768, out_features=3072, bias=True)
-          (act): GELU(approximate=none)
-          (fc2): Linear(in_features=3072, out_features=768, bias=True)
-          (drop): Dropout(p=0.0, inplace=False)
-        )
-      )
-      (9): Block(
-        (norm1): LayerNorm((768,), eps=1e-06, elementwise_affine=True)
-        (attn): Attention(
-          (qkv): Linear(in_features=768, out_features=2304, bias=True)
-          (attn_drop): Dropout(p=0.0, inplace=False)
-          (proj): Linear(in_features=768, out_features=768, bias=True)
-          (proj_drop): Dropout(p=0.0, inplace=False)
-        )
-        (drop_path): Identity()
-        (norm2): LayerNorm((768,), eps=1e-06, elementwise_affine=True)
-        (mlp): Mlp(
-          (fc1): Linear(in_features=768, out_features=3072, bias=True)
-          (act): GELU(approximate=none)
-          (fc2): Linear(in_features=3072, out_features=768, bias=True)
-          (drop): Dropout(p=0.0, inplace=False)
-        )
-      )
-      (10): Block(
-        (norm1): LayerNorm((768,), eps=1e-06, elementwise_affine=True)
-        (attn): Attention(
-          (qkv): Linear(in_features=768, out_features=2304, bias=True)
-          (attn_drop): Dropout(p=0.0, inplace=False)
-          (proj): Linear(in_features=768, out_features=768, bias=True)
-          (proj_drop): Dropout(p=0.0, inplace=False)
-        )
-        (drop_path): Identity()
-        (norm2): LayerNorm((768,), eps=1e-06, elementwise_affine=True)
-        (mlp): Mlp(
-          (fc1): Linear(in_features=768, out_features=3072, bias=True)
-          (act): GELU(approximate=none)
-          (fc2): Linear(in_features=3072, out_features=768, bias=True)
-          (drop): Dropout(p=0.0, inplace=False)
-        )
-      )
-      (11): Block(
-        (norm1): LayerNorm((768,), eps=1e-06, elementwise_affine=True)
-        (attn): Attention(
-          (qkv): Linear(in_features=768, out_features=2304, bias=True)
-          (attn_drop): Dropout(p=0.0, inplace=False)
-          (proj): Linear(in_features=768, out_features=768, bias=True)
-          (proj_drop): Dropout(p=0.0, inplace=False)
-        )
-        (drop_path): Identity()
-        (norm2): LayerNorm((768,), eps=1e-06, elementwise_affine=True)
-        (mlp): Mlp(
-          (fc1): Linear(in_features=768, out_features=3072, bias=True)
-          (act): GELU(approximate=none)
-          (fc2): Linear(in_features=3072, out_features=768, bias=True)
-          (drop): Dropout(p=0.0, inplace=False)
-        )
-      )
-    )
-    (norm): LayerNorm((768,), eps=1e-06, elementwise_affine=True)
-    (pre_logits): Identity()
-    (head): Linear(in_features=768, out_features=1000, bias=True)
-  )
-  (prompt): Prompt()
-  (avgpool): AdaptiveAvgPool2d(output_size=(1, 768))
-  (classifier): Linear(in_features=768, out_features=100, bias=True)
-)
-Class per task : 
- [tensor([77, 68, 16,  2, 81, 84,  6, 20, 79, 23]), tensor([ 8,  7, 99,  3, 57, 36, 25, 78, 74, 48]), tensor([56, 18, 50, 98, 73, 96, 75, 51, 21, 41]), tensor([69, 89, 52, 64, 32,  4, 62, 14, 49, 33]), tensor([53, 24, 76, 54, 44, 94, 46, 45, 10, 12]), tensor([ 5, 65, 31, 72,  9, 63, 27, 86, 37, 22]), tensor([66, 42, 40, 61, 17, 47, 80, 83, 70, 82]), tensor([35, 97, 88, 91, 19, 67, 34, 28, 59, 55]), tensor([85,  0, 71, 43,  1, 15, 11, 29, 58, 60]), tensor([39, 30, 38, 87, 13, 93, 90, 26, 95, 92])]
-
-Train for :  0
-                                                                                 Train Epoch: 1 [5000/5000 (100%)]	Loss: 1.171603	Accuracy: 88.574219
-
-                                                                                 Train Epoch: 2 [5000/5000 (100%)]	Loss: 0.119225	Accuracy: 98.613281
-
-                                                                                 Train Epoch: 3 [5000/5000 (100%)]	Loss: 0.041928	Accuracy: 98.867188
-
-                                                                                 Train Epoch: 4 [5000/5000 (100%)]	Loss: 0.131644	Accuracy: 98.535156
-
-                                                                                 Train Epoch: 5 [5000/5000 (100%)]	Loss: 0.024360	Accuracy: 99.433594
-
-Task :  0
-                                                                                Test Epoch: 5 [1000/1000 (100%)]	Loss: 3.625655	Accuracy: 98.490085
-
-Train for :  1
-                                                                                 Train Epoch: 1 [5000/5000 (100%)]	Loss: 1.447116	Accuracy: 91.523438
-
-                                                                                 Train Epoch: 2 [5000/5000 (100%)]	Loss: 0.466056	Accuracy: 96.992188
-
-                                                                                 Train Epoch: 3 [5000/5000 (100%)]	Loss: 0.768281	Accuracy: 96.445312
-
-                                                                                 Train Epoch: 4 [5000/5000 (100%)]	Loss: 0.242057	Accuracy: 98.164062
-
-                                                                                 Train Epoch: 5 [5000/5000 (100%)]	Loss: 0.158922	Accuracy: 98.515625
-
-Task :  0
-                                                                                Test Epoch: 5 [1000/1000 (100%)]	Loss: 3.903897	Accuracy: 71.093750
-Task :  1
-                                                                                Test Epoch: 5 [1000/1000 (100%)]	Loss: 3.680854	Accuracy: 93.246695
-
-Train for :  2
-                                                                                 Train Epoch: 1 [5000/5000 (100%)]	Loss: 1.159946	Accuracy: 92.890625
-
-                                                                                 Train Epoch: 2 [5000/5000 (100%)]	Loss: 0.393866	Accuracy: 98.496094
-
-                                                                                 Train Epoch: 3 [5000/5000 (100%)]	Loss: 0.381773	Accuracy: 98.496094
-
-                                                                                 Train Epoch: 4 [5000/5000 (100%)]	Loss: 0.316068	Accuracy: 98.828125
-
-                                                                                 Train Epoch: 5 [5000/5000 (100%)]	Loss: 0.021394	Accuracy: 99.726562
-
-Task :  0
-                                                                                Test Epoch: 5 [1000/1000 (100%)]	Loss: 4.208077	Accuracy: 40.181791
-Task :  1
-                                                                                Test Epoch: 5 [1000/1000 (100%)]	Loss: 3.898046	Accuracy: 71.356671
-Task :  2
-                                                                                Test Epoch: 5 [1000/1000 (100%)]	Loss: 3.619887	Accuracy: 99.023438
-
-Train for :  3
-                                                                                 Train Epoch: 1 [5000/5000 (100%)]	Loss: 1.586418	Accuracy: 91.640625
-
-                                                                                 Train Epoch: 2 [5000/5000 (100%)]	Loss: 0.456218	Accuracy: 97.734375
-
-                                                                                 Train Epoch: 3 [5000/5000 (100%)]	Loss: 0.207137	Accuracy: 98.906250
-
-                                                                                 Train Epoch: 4 [5000/5000 (100%)]	Loss: 0.038970	Accuracy: 99.433594
-
-                                                                                 Train Epoch: 5 [5000/5000 (100%)]	Loss: 0.138803	Accuracy: 98.886719
-
-Task :  0
-                                                                                Test Epoch: 5 [1000/1000 (100%)]	Loss: 4.322021	Accuracy: 29.169171
-Task :  1
-                                                                                Test Epoch: 5 [1000/1000 (100%)]	Loss: 3.944362	Accuracy: 66.849460
-Task :  2
-                                                                                Test Epoch: 5 [1000/1000 (100%)]	Loss: 3.661832	Accuracy: 94.831731
-Task :  3
-                                                                                Test Epoch: 5 [1000/1000 (100%)]	Loss: 3.722170	Accuracy: 88.611779
-
-Train for :  4
-                                                                                 Train Epoch: 1 [5000/5000 (100%)]	Loss: 1.274108	Accuracy: 92.480469
-
-                                                                                 Train Epoch: 2 [5000/5000 (100%)]	Loss: 0.357277	Accuracy: 98.535156
-
-                                                                                 Train Epoch: 3 [5000/5000 (100%)]	Loss: 0.098763	Accuracy: 99.414062
-
-                                                                                 Train Epoch: 4 [5000/5000 (100%)]	Loss: 0.090432	Accuracy: 99.375000
-
-                                                                                 Train Epoch: 5 [5000/5000 (100%)]	Loss: 0.046009	Accuracy: 99.765625
-
-Task :  0
-                                                                                Test Epoch: 5 [1000/1000 (100%)]	Loss: 4.609376	Accuracy: 0.097656
-Task :  1
-                                                                                Test Epoch: 5 [1000/1000 (100%)]	Loss: 4.343283	Accuracy: 26.953125
-Task :  2
-                                                                                Test Epoch: 5 [1000/1000 (100%)]	Loss: 4.059250	Accuracy: 55.063101
-Task :  3
-                                                                                Test Epoch: 5 [1000/1000 (100%)]	Loss: 3.937071	Accuracy: 67.277645
-Task :  4
-                                                                                Test Epoch: 5 [1000/1000 (100%)]	Loss: 3.679373	Accuracy: 93.066407
-
-Train for :  5
-                                                                                 Train Epoch: 1 [5000/5000 (100%)]	Loss: 1.736464	Accuracy: 91.582031
-
-                                                                                 Train Epoch: 2 [5000/5000 (100%)]	Loss: 0.378264	Accuracy: 98.437500
-
-                                                                                 Train Epoch: 3 [5000/5000 (100%)]	Loss: 0.186237	Accuracy: 98.925781
-
-                                                                                 Train Epoch: 4 [5000/5000 (100%)]	Loss: 0.048801	Accuracy: 99.453125
-
-                                                                                 Train Epoch: 5 [5000/5000 (100%)]	Loss: 0.015595	Accuracy: 99.746094
-
-Task :  0
-                                                                                Test Epoch: 5 [1000/1000 (100%)]	Loss: 4.599578	Accuracy: 1.096755
-Task :  1
-                                                                                Test Epoch: 5 [1000/1000 (100%)]	Loss: 4.309378	Accuracy: 30.130709
-Task :  2
-                                                                                Test Epoch: 5 [1000/1000 (100%)]	Loss: 3.997067	Accuracy: 61.621094
-Task :  3
-                                                                                Test Epoch: 5 [1000/1000 (100%)]	Loss: 3.886202	Accuracy: 72.318210
-Task :  4
-                                                                                Test Epoch: 5 [1000/1000 (100%)]	Loss: 3.674711	Accuracy: 93.697416
-Task :  5
-                                                                                Test Epoch: 5 [1000/1000 (100%)]	Loss: 3.798122	Accuracy: 81.099760
-
-Train for :  6
-                                                                                 Train Epoch: 1 [5000/5000 (100%)]	Loss: 0.778629	Accuracy: 95.058594
-
-                                                                                 Train Epoch: 2 [5000/5000 (100%)]	Loss: 0.376066	Accuracy: 98.925781
-
-                                                                                 Train Epoch: 3 [5000/5000 (100%)]	Loss: 0.202862	Accuracy: 99.355469
-
-                                                                                 Train Epoch: 4 [5000/5000 (100%)]	Loss: 0.103438	Accuracy: 99.628906
-
-                                                                                 Train Epoch: 5 [5000/5000 (100%)]	Loss: -0.004832	Accuracy: 99.941406
-
-Task :  0
-                                                                                Test Epoch: 5 [1000/1000 (100%)]	Loss: 4.607180	Accuracy: 0.292969
-Task :  1
-                                                                                Test Epoch: 5 [1000/1000 (100%)]	Loss: 4.385338	Accuracy: 22.836539
-Task :  2
-                                                                                Test Epoch: 5 [1000/1000 (100%)]	Loss: 3.946873	Accuracy: 66.301082
-Task :  3
-                                                                                Test Epoch: 5 [1000/1000 (100%)]	Loss: 3.948733	Accuracy: 66.128305
-Task :  4
-                                                                                Test Epoch: 5 [1000/1000 (100%)]	Loss: 3.728034	Accuracy: 88.266227
-Task :  5
-                                                                                Test Epoch: 5 [1000/1000 (100%)]	Loss: 3.813341	Accuracy: 79.679988
-Task :  6
-                                                                                Test Epoch: 5 [1000/1000 (100%)]	Loss: 3.672601	Accuracy: 93.592248
-
-Train for :  7
-                                                                                 Train Epoch: 1 [5000/5000 (100%)]	Loss: 1.418131	Accuracy: 93.964844
-
-                                                                                 Train Epoch: 2 [5000/5000 (100%)]	Loss: 1.199304	Accuracy: 96.875000
-
-                                                                                 Train Epoch: 3 [5000/5000 (100%)]	Loss: 0.251302	Accuracy: 99.140625
-
-                                                                                 Train Epoch: 4 [5000/5000 (100%)]	Loss: 0.081527	Accuracy: 99.453125
-
-                                                                                 Train Epoch: 5 [5000/5000 (100%)]	Loss: 0.021661	Accuracy: 99.726562
-
-Task :  0
-                                                                                Test Epoch: 5 [1000/1000 (100%)]	Loss: 4.598627	Accuracy: 1.292067
-Task :  1
-                                                                                Test Epoch: 5 [1000/1000 (100%)]	Loss: 4.301345	Accuracy: 30.806791
-Task :  2
-                                                                                Test Epoch: 5 [1000/1000 (100%)]	Loss: 3.970607	Accuracy: 64.009916
-Task :  3
-                                                                                Test Epoch: 5 [1000/1000 (100%)]	Loss: 4.027076	Accuracy: 58.278245
-Task :  4
-                                                                                Test Epoch: 5 [1000/1000 (100%)]	Loss: 3.768374	Accuracy: 84.435096
-Task :  5
-                                                                                Test Epoch: 5 [1000/1000 (100%)]	Loss: 3.773580	Accuracy: 83.676383
-Task :  6
-                                                                                Test Epoch: 5 [1000/1000 (100%)]	Loss: 3.717130	Accuracy: 89.295373
-Task :  7
-                                                                                Test Epoch: 5 [1000/1000 (100%)]	Loss: 3.687302	Accuracy: 92.322717
-
-Train for :  8
-                                                                                 Train Epoch: 1 [5000/5000 (100%)]	Loss: 1.460333	Accuracy: 93.378906
-
-                                                                                 Train Epoch: 2 [5000/5000 (100%)]	Loss: 0.602992	Accuracy: 98.125000
-
-                                                                                 Train Epoch: 3 [5000/5000 (100%)]	Loss: 0.351370	Accuracy: 98.437500
-
-                                                                                 Train Epoch: 4 [5000/5000 (100%)]	Loss: 0.237453	Accuracy: 98.613281
-
-                                                                                 Train Epoch: 5 [5000/5000 (100%)]	Loss: 0.107172	Accuracy: 99.277344
-
-Task :  0
-                                                                                Test Epoch: 5 [1000/1000 (100%)]	Loss: 4.595498	Accuracy: 1.434796
-Task :  1
-                                                                                Test Epoch: 5 [1000/1000 (100%)]	Loss: 4.369892	Accuracy: 24.121094
-Task :  2
-                                                                                Test Epoch: 5 [1000/1000 (100%)]	Loss: 4.008483	Accuracy: 60.208835
-Task :  3
-                                                                                Test Epoch: 5 [1000/1000 (100%)]	Loss: 4.027526	Accuracy: 58.255710
-Task :  4
-                                                                                Test Epoch: 5 [1000/1000 (100%)]	Loss: 3.790342	Accuracy: 82.196515
-Task :  5
-                                                                                Test Epoch: 5 [1000/1000 (100%)]	Loss: 3.800108	Accuracy: 81.017128
-Task :  6
-                                                                                Test Epoch: 5 [1000/1000 (100%)]	Loss: 3.720496	Accuracy: 89.032453
-Task :  7
-                                                                                Test Epoch: 5 [1000/1000 (100%)]	Loss: 3.739346	Accuracy: 87.229568
-Task :  8
-                                                                                Test Epoch: 5 [1000/1000 (100%)]	Loss: 3.671261	Accuracy: 93.712440
-
-Train for :  9
-                                                                                 Train Epoch: 1 [5000/5000 (100%)]	Loss: 1.559461	Accuracy: 92.929688
-
-                                                                                 Train Epoch: 2 [5000/5000 (100%)]	Loss: 0.742170	Accuracy: 97.519531
-
-                                                                                 Train Epoch: 3 [5000/5000 (100%)]	Loss: 0.571908	Accuracy: 97.832031
-
-                                                                                 Train Epoch: 4 [5000/5000 (100%)]	Loss: 0.249875	Accuracy: 98.730469
-
-                                                                                 Train Epoch: 5 [5000/5000 (100%)]	Loss: 0.136084	Accuracy: 99.179688
-
-Task :  0
-                                                                                Test Epoch: 5 [1000/1000 (100%)]	Loss: 4.610431	Accuracy: 0.000000
-Task :  1
-                                                                                Test Epoch: 5 [1000/1000 (100%)]	Loss: 4.415108	Accuracy: 19.929387
-Task :  2
-                                                                                Test Epoch: 5 [1000/1000 (100%)]	Loss: 3.945237	Accuracy: 66.684195
-Task :  3
-                                                                                Test Epoch: 5 [1000/1000 (100%)]	Loss: 4.112400	Accuracy: 49.631912
-Task :  4
-                                                                                Test Epoch: 5 [1000/1000 (100%)]	Loss: 3.902064	Accuracy: 70.770734
-Task :  5
-                                                                                Test Epoch: 5 [1000/1000 (100%)]	Loss: 3.795566	Accuracy: 81.452825
-Task :  6
-                                                                                Test Epoch: 5 [1000/1000 (100%)]	Loss: 3.755387	Accuracy: 85.419171
-Task :  7
-                                                                                Test Epoch: 5 [1000/1000 (100%)]	Loss: 3.773748	Accuracy: 83.451022
-Task :  8
-                                                                                Test Epoch: 5 [1000/1000 (100%)]	Loss: 3.711592	Accuracy: 89.963943
-Task :  9
-                                                                                Test Epoch: 5 [1000/1000 (100%)]	Loss: 3.673704	Accuracy: 93.689904
-
-Done
