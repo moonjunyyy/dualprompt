@@ -1,3 +1,4 @@
+from sqlite3 import paramstyle
 import sys
 
 import torch.optim as optim
@@ -34,28 +35,25 @@ def main(**kwargs):
     train_dataset = CIFAR100(DATA_PATH, download=True, train=True,  transform=transformCifar)
     test_dataset  = CIFAR100(DATA_PATH, download=True, train=False, transform=transformCifar)
 
-    #config = resolve_data_config({}, model=backbone)
-    #transform = create_transform(**config)
-    model = L2P(pool_size      = pool_size,
-                selection_size = selection_size,
-                prompt_len     = prompt_len,
-                dimention      = dimention,
-                class_num      = num_class,
-                backbone_name  = backbone_name)
-    print(model)
-
-    optimizer = optim.Adam(model.parameters(), lr = 0.03, betas=(0.9, 0.999))
-    train = trainer_til(model,
-                        optimizer,
-                        train_dataset,
-                        test_dataset,
-                        num_tasks    = num_tasks,
-                        epochs       = epochs,
-                        batch_size   = batchsize,
-                        step_size    = batch_per_step,
-                        log_interval = log_interval,
-                        save_dir     = MODEL_PATH,
-                        use_amp      = use_amp)
+    train = trainer_til( model = L2P,
+                         pool_size = pool_size,
+                         selection_size = selection_size,
+                         prompt_len = prompt_len,
+                         dimention = dimention,
+                         class_num = num_class,
+                         backbone_name = backbone_name,
+                         train_dataset = train_dataset,
+                         test_dataset = test_dataset,
+                         batch_size = batchsize,
+                         epochs = epochs,
+                         step_size = 1,
+                         log_freqency = 10,
+                         save_dir = MODEL_PATH,
+                         optimizer = optim.Adam,
+                         lr = 0.03,
+                         betas=(0.9, 0.999),
+                         lr_scheduler = None,
+                         use_amp = use_amp)
     train.cuda()
     train.train()
 

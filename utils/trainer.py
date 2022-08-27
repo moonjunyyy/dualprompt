@@ -57,12 +57,12 @@ class trainer():
         if optimizer     is None:        
             self.optimizer    = optim.SGD(self.model.parameters(), lr=0.01, momentum=0.9)
         else:
-            self.optimizer    = optimizer(**kwargs)
+            self.optimizer    = optimizer(self.model.parameters(), **kwargs)
 
         if lr_scheduler  is None:        
             self.lr_scheduler = torch.optim.lr_scheduler.ConstantLR(self.optimizer, 1.0)
         else:
-            self.lr_scheduler = lr_scheduler(**kwargs)
+            self.lr_scheduler = lr_scheduler(self.optimizer, **kwargs)
 
         self.batch_size       = batch_size
         self.train_dataloader = DataLoader(train_dataset,
