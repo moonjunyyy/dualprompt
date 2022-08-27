@@ -42,7 +42,9 @@ class L2P(nn.Module):
         self.past_class = self.past_class.to(next(self.parameters()).device)
 
         x = self.backbone.patch_embed(inputs)
-        x = self.backbone._pos_embed(x)
+        cls_token = self.backbone.cls_token.expand(x.shape[0], -1, -1)  # stole cls_tokens impl from Phil Wang, thanks
+        x = torch.cat((cls_token, x), dim=1)
+        x = self.backbone.pos_drop(x + self.backbone.pos_embed)
         q = self.backbone.blocks(x)
         q = self.backbone.norm(q)[:, 0, :].clone()
 

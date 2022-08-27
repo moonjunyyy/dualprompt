@@ -1,6 +1,1 @@
-Traceback (most recent call last):
-  File "/home/junyeong/workspace/dualprompt/main.py", line 88, in <module>
-    main(**l2p_argvs)
-  File "/home/junyeong/workspace/dualprompt/main.py", line 22, in main
-    batch_per_step = step_size // batchsize
-TypeError: unsupported operand type(s) for //: 'int' and 'str'
+slurmstepd-nipa2022-64009: error: *** JOB 418 ON nipa2022-64009 CANCELLED AT 2022-08-27T01:10:05 ***

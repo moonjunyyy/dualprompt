@@ -17,18 +17,18 @@ def main(**kwargs):
     MODEL_PATH     = kwargs["--save-path"]
     DATA_PATH      = kwargs["--data-path"]
 
-    batchsize      = kwargs["--batchsize"]
-    step_size      = kwargs["--stepsize"]
+    batchsize      = int(kwargs["--batchsize"])
+    step_size      = int(kwargs["--stepsize"])
     batch_per_step = step_size // batchsize
     backbone_name  = kwargs["--backbone-name"]
-    epochs         = kwargs["--epochs"]
-    log_interval   = kwargs["--log-interval"]
-    pool_size      = kwargs["--pool-size"]
-    selection_size = kwargs["--selection-size"]
-    prompt_len     = kwargs["--prompt-len"]
-    dimention      = kwargs["--dimention"]
-    num_tasks      = kwargs["--num-tasks"]
-    num_class      = kwargs["--num-class"]
+    epochs         = int(kwargs["--epochs"])
+    log_interval   = int(kwargs["--log-interval"])
+    pool_size      = int(kwargs["--pool-size"])
+    selection_size = int(kwargs["--selection-size"])
+    prompt_len     = int(kwargs["--prompt-len"])
+    dimention      = int(kwargs["--dimention"])
+    num_tasks      = int(kwargs["--num-tasks"])
+    num_class      = int(kwargs["--num-class"])
     lr_scheduler   = kwargs["--lr-scheduler"]
     use_amp        = kwargs["--use-amp"]
 
