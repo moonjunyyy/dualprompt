@@ -1,4 +1,3 @@
-import os
 import sys
 
 import torch.optim as optim
@@ -8,9 +7,6 @@ from torchvision.datasets import CIFAR100
 from models.L2P import L2P
 from utils.argvs import l2p_argvs
 from utils.trainer_continual import trainer_til
-
-os.environ['CUDA_LAUNCH_BLOCKING'] = "1"
-os.environ["CUDA_VISIBLE_DEVICES"] = "0"
 
 def main(**kwargs):
 
@@ -65,7 +61,6 @@ def main(**kwargs):
 
 if __name__ == "__main__":
     for n, name in enumerate(sys.argv):
-        print(n, name)
         try:
             if n % 2 == 0:
                 continue

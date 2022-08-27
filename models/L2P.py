@@ -66,7 +66,12 @@ class L2P(nn.Module):
             x = F.softmax(x, dim = -1)
         self.simmilairty = _simmilarity.sum() / x.size()[0]
         return x
-        
+    
+    def metrics(self, output, target):
+        return {'loss'       : self.loss_fn(output, target),
+                'accuracy'   : self.accuracy(output, target),
+                'simmilarity': self.simmilairty}
+
     def loss_fn(self, output, target):
         return F.cross_entropy(output, target) - 0.5 * self.simmilairty
 

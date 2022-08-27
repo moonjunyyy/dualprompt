@@ -1,26 +1,33 @@
 import os
+
 import matplotlib.pyplot as plt
-import numpy as np
+
 import torch
 import torch.nn as nn
-from utils.trainer import trainer
-from torch.utils.data import Dataset, DataLoader, Subset
+import torch.optim as optim
+from torch.optim.lr_scheduler import _LRScheduler
+from torch.utils.data import DataLoader, Dataset, Subset
 from torch.utils.tensorboard import SummaryWriter
+
+from utils.trainer import trainer
+
 
 class trainer_til(trainer):
     def __init__(self,
-                 model            : nn.Module,
-                 optimizer        : torch.optim.Optimizer,
-                 train_dataset    : Dataset,
-                 test_dataset     : Dataset,
-                 num_tasks        : int,
-                 epochs           : int,
-                 batch_size       : int,
-                 step_size        : int,
-                 log_interval     : int,
-                 save_dir         : str = None,
-                 lr_scheduler     : torch.optim.lr_scheduler._LRScheduler = None,
-                 use_amp          : bool = False,
+                 model          : nn.Module         = None,
+                 train_dataset  : Dataset           = None,
+                 test_dataset   : Dataset           = None,
+                 batch_size     : int               = 16,
+                 num_tasks      : int               = 1,
+                 num_workers    : int               = 2,
+                 epoch_start    : int               = 1,
+                 epochs         : int               = 100,
+                 step_size      : int               = 1,
+                 log_freqency   : int               = 10,
+                 save_dir       : str               = None,
+                 optimizer      : optim.Optimizer   = None,
+                 lr_scheduler   : _LRScheduler      = None,
+                 use_amp        : bool              = False,
                  *args, **kwargs) -> None:
                   
         r'''
@@ -49,23 +56,25 @@ class trainer_til(trainer):
             The learning rate scheduler.
         '''
         super().__init__(model,
-                         optimizer,
                          train_dataset,
                          test_dataset,
-                         epochs,
                          batch_size,
+                         num_workers,
+                         epoch_start,
+                         epochs,
                          step_size,
-                         log_interval,
+                         log_freqency,
                          save_dir,
+                         optimizer,
                          lr_scheduler,
                          use_amp)
 
+        self.num_workers          = num_workers
         self.num_tasks            = num_tasks
         self._class_per_task      = self._class_split()
         self.save_dir             = save_dir
 
-        print('Class per task : \n', self._class_per_task, end="\n\n")
-
+        print('\nClass per task : ', self._class_per_task, end="\n\n")
         self._train_data_per_task = [Subset(self.train_dataset, self._dataset_mask(cls, self.train_dataset)) for cls in self._class_per_task]
         self._test_data_per_task  = [Subset(self.test_dataset,  self._dataset_mask(cls, self.test_dataset )) for cls in self._class_per_task]
 
@@ -75,12 +84,12 @@ class trainer_til(trainer):
         self.train_dataloader = DataLoader(self._train_data_per_task[self.taskID],
                                            batch_size  = self.batch_size,
                                            shuffle     = True,
-                                           num_workers = 4)
+                                           num_workers=num_workers)
 
         self.test_dataloader  = DataLoader(self._test_data_per_task [self.testID],
                                            batch_size  = self.batch_size,
                                            shuffle     = False,
-                                           num_workers = 4)
+                                           num_workers=num_workers)
         
     def _convert_task(self, task_idx = -1, test_idx = -1):
         r'''
@@ -90,18 +99,15 @@ class trainer_til(trainer):
             self.taskID = task_idx
         if test_idx != -1:
             self.testID = test_idx
-
         self.train_dataloader = DataLoader(self._train_data_per_task[self.taskID],
                                            batch_size  = self.batch_size,
                                            shuffle     = True,
-                                           num_workers = 4,
-                                           pin_memory  = True)
+                                           num_workers = self.num_workers)
 
         self.test_dataloader  = DataLoader(self._test_data_per_task [self.testID],
                                            batch_size  = self.batch_size,
                                            shuffle     = False,
-                                           num_workers = 4,
-                                           pin_memory  = True)
+                                           num_workers = self.num_workers)
 
     def _class_split(self):
         r'''
