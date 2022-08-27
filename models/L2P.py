@@ -14,7 +14,8 @@ class L2P(nn.Module):
                  prompt_len     : int,
                  class_num      : int,
                  backbone_name  : str,
-                 *args, **kwargs):
+                 device         : torch.device,
+                 **kwargs):
 
         super(L2P, self).__init__()
 
@@ -28,19 +29,18 @@ class L2P(nn.Module):
         for param in self.backbone.parameters():
             param.requires_grad = False
 
-        self.prompt         = Prompt(pool_size, selection_size, prompt_len, dimention)
+        self.prompt         = Prompt(pool_size, selection_size, prompt_len, dimention, device)
         self.simmilairty    = 0.0
         self.avgpool        = nn.AdaptiveAvgPool2d((1,dimention))
 
-        self.past_class     = torch.zeros(class_num)
+        self.past_class     = torch.zeros(class_num, device = device)
 
-        self.classifier        = nn.Linear     (dimention, class_num)
-        self.classifier.weight = nn.init.zeros_(self.classifier.weight)
-        self.classifier.bias   = nn.init.zeros_(self.classifier.bias)
+        self.classifier        = nn.Linear     (dimention, class_num,   device = device)
+        self.classifier.weight = nn.init.zeros_(self.classifier.weight, device = device)
+        self.classifier.bias   = nn.init.zeros_(self.classifier.bias,   device = device)
 
     def forward(self, inputs : torch.Tensor, *args, **kwargs):
-        self.past_class = self.past_class.to(next(self.parameters()).device)
-
+        
         x = self.backbone.patch_embed(inputs)
         cls_token = self.backbone.cls_token.expand(x.shape[0], -1, -1)  # stole cls_tokens impl from Phil Wang, thanks
         x = torch.cat((cls_token, x), dim=1)

@@ -3,7 +3,7 @@ import torch.nn as nn
 import torch.nn.functional as F
 
 class Prompt(nn.Module):
-    def __init__(self, pool_size : int, selection_size : int, prompt_len : int, dimention : int, *args, **kwargs):
+    def __init__(self, pool_size : int, selection_size : int, prompt_len : int, dimention : int, device : torch.device, **kwargs):
         super(Prompt, self).__init__()
 
         self.pool_size      = pool_size
@@ -11,14 +11,14 @@ class Prompt(nn.Module):
         self.prompt_len     = prompt_len
         self.dimention      = dimention
 
-        self.key            = nn.Parameter(torch.randn(pool_size,             dimention, requires_grad=True))
-        self.prompt         = nn.Parameter(torch.randn(pool_size, prompt_len, dimention, requires_grad=True))
+        self.key            = nn.Parameter(torch.randn(pool_size,             dimention, requires_grad=True, device = device))
+        self.prompt         = nn.Parameter(torch.randn(pool_size, prompt_len, dimention, requires_grad=True, device = device))
 
         self.key    = nn.init.uniform_(self.key,    -1, 1)
         self.prompt = nn.init.uniform_(self.prompt, -1, 1)
 
-        self.frequency      = torch.ones (pool_size)
-        self.counter        = torch.zeros(pool_size)
+        self.frequency      = torch.ones (pool_size, device = device)
+        self.counter        = torch.zeros(pool_size, device = device)
 
     def forward(self, query : torch.Tensor, *args, **kwargs):
         
