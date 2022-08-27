@@ -6,22 +6,26 @@ Traceback (most recent call last):
   File "/home/junyeong/workspace/dualprompt/utils/trainer_continual.py", line 58, in __init__
     super().__init__(model,
   File "/home/junyeong/workspace/dualprompt/utils/trainer.py", line 52, in __init__
-    self.model        = nn.parallel.data_parallel(model(**kwargs).to(self.device), input, range(torch.cuda.device_count()))
+    self.model        = nn.parallel.data_parallel(model(device = self.device, **kwargs).to(self.device), input, range(torch.cuda.device_count()))
   File "/home/junyeong/anaconda3/envs/dualprompt/lib/python3.10/site-packages/torch/nn/parallel/data_parallel.py", line 231, in data_parallel
     outputs = parallel_apply(replicas, inputs, module_kwargs, used_device_ids)
   File "/home/junyeong/anaconda3/envs/dualprompt/lib/python3.10/site-packages/torch/nn/parallel/parallel_apply.py", line 86, in parallel_apply
     output.reraise()
   File "/home/junyeong/anaconda3/envs/dualprompt/lib/python3.10/site-packages/torch/_utils.py", line 461, in reraise
     raise exception
-StopIteration: Caught StopIteration in replica 0 on device 0.
+AttributeError: Caught AttributeError in replica 0 on device 0.
 Original Traceback (most recent call last):
   File "/home/junyeong/anaconda3/envs/dualprompt/lib/python3.10/site-packages/torch/nn/parallel/parallel_apply.py", line 61, in _worker
     output = module(*input, **kwargs)
   File "/home/junyeong/anaconda3/envs/dualprompt/lib/python3.10/site-packages/torch/nn/modules/module.py", line 1130, in _call_impl
     return forward_call(*input, **kwargs)
-  File "/home/junyeong/workspace/dualprompt/models/L2P.py", line 42, in forward
-    self.past_class = self.past_class.to(next(self.parameters()).device)
-StopIteration
+  File "/home/junyeong/workspace/dualprompt/models/L2P.py", line 44, in forward
+    x = self.backbone.patch_embed(inputs)
+  File "/home/junyeong/anaconda3/envs/dualprompt/lib/python3.10/site-packages/torch/nn/modules/module.py", line 1130, in _call_impl
+    return forward_call(*input, **kwargs)
+  File "/home/junyeong/anaconda3/envs/dualprompt/lib/python3.10/site-packages/timm/models/layers/patch_embed.py", line 32, in forward
+    B, C, H, W = x.shape
+AttributeError: 'builtin_function_or_method' object has no attribute 'shape'
 
 Traceback (most recent call last):
   File "/home/junyeong/workspace/dualprompt/main.py", line 81, in <module>
@@ -31,20 +35,24 @@ Traceback (most recent call last):
   File "/home/junyeong/workspace/dualprompt/utils/trainer_continual.py", line 58, in __init__
     super().__init__(model,
   File "/home/junyeong/workspace/dualprompt/utils/trainer.py", line 52, in __init__
-    self.model        = nn.parallel.data_parallel(model(**kwargs).to(self.device), input, range(torch.cuda.device_count()))
+    self.model        = nn.parallel.data_parallel(model(device = self.device, **kwargs).to(self.device), input, range(torch.cuda.device_count()))
   File "/home/junyeong/anaconda3/envs/dualprompt/lib/python3.10/site-packages/torch/nn/parallel/data_parallel.py", line 231, in data_parallel
     outputs = parallel_apply(replicas, inputs, module_kwargs, used_device_ids)
   File "/home/junyeong/anaconda3/envs/dualprompt/lib/python3.10/site-packages/torch/nn/parallel/parallel_apply.py", line 86, in parallel_apply
     output.reraise()
   File "/home/junyeong/anaconda3/envs/dualprompt/lib/python3.10/site-packages/torch/_utils.py", line 461, in reraise
     raise exception
-StopIteration: Caught StopIteration in replica 0 on device 0.
+AttributeError: Caught AttributeError in replica 0 on device 0.
 Original Traceback (most recent call last):
   File "/home/junyeong/anaconda3/envs/dualprompt/lib/python3.10/site-packages/torch/nn/parallel/parallel_apply.py", line 61, in _worker
     output = module(*input, **kwargs)
   File "/home/junyeong/anaconda3/envs/dualprompt/lib/python3.10/site-packages/torch/nn/modules/module.py", line 1130, in _call_impl
     return forward_call(*input, **kwargs)
-  File "/home/junyeong/workspace/dualprompt/models/L2P.py", line 42, in forward
-    self.past_class = self.past_class.to(next(self.parameters()).device)
-StopIteration
+  File "/home/junyeong/workspace/dualprompt/models/L2P.py", line 44, in forward
+    x = self.backbone.patch_embed(inputs)
+  File "/home/junyeong/anaconda3/envs/dualprompt/lib/python3.10/site-packages/torch/nn/modules/module.py", line 1130, in _call_impl
+    return forward_call(*input, **kwargs)
+  File "/home/junyeong/anaconda3/envs/dualprompt/lib/python3.10/site-packages/timm/models/layers/patch_embed.py", line 32, in forward
+    B, C, H, W = x.shape
+AttributeError: 'builtin_function_or_method' object has no attribute 'shape'
 
