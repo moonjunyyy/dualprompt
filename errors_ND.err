@@ -1,0 +1,12 @@
+Traceback (most recent call last):
+  File "/home/junyeong/workspace/dualprompt/main.py", line 83, in <module>
+    main(**l2p_argvs)
+  File "/home/junyeong/workspace/dualprompt/main.py", line 48, in main
+    train = trainer_til(model,
+TypeError: trainer_til.__init__() got multiple values for argument 'batch_size'
+Traceback (most recent call last):
+  File "/home/junyeong/workspace/dualprompt/main.py", line 83, in <module>
+    main(**l2p_argvs)
+  File "/home/junyeong/workspace/dualprompt/main.py", line 48, in main
+    train = trainer_til(model,
+TypeError: trainer_til.__init__() got multiple values for argument 'batch_size'
