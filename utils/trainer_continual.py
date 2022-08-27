@@ -28,7 +28,7 @@ class trainer_til(trainer):
                  optimizer      : optim.Optimizer   = None,
                  lr_scheduler   : _LRScheduler      = None,
                  use_amp        : bool              = False,
-                 *args, **kwargs) -> None:
+                 **kwargs) -> None:
                   
         r'''
         Initialize the trainer class.
@@ -67,7 +67,8 @@ class trainer_til(trainer):
                          save_dir,
                          optimizer,
                          lr_scheduler,
-                         use_amp)
+                         use_amp,
+                         **kwargs)
 
         self.num_workers          = num_workers
         self.num_tasks            = num_tasks
