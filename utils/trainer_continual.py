@@ -32,7 +32,6 @@ class trainer_til(trainer):
                  lr_schedul_args: dict              = None,
                  use_amp        : bool              = False,
                  **kwargs) -> None:
-                  
         r'''
         Initialize the trainer class.
         
@@ -40,23 +39,33 @@ class trainer_til(trainer):
         --------------------------------------------------------------
         model : nn.Module
             The model to be trained.
-            accuracy and loss_fn needed to be implemented.
+            loss must be implemented in metric function.
         optimizer : torch.optim.Optimizer
             The optimizer to be used.
-        train_dataset : Dataset
-            The dataset for training.
-        test_dataset : Dataset
-            The dataset for testing.
+        lr_scheduler : torch.optim.lr_scheduler._LRScheduler
+            The learning rate scheduler to be used.
+        train_dataset : torch.utils.data.Dataset
+            The training dataset.
+        test_dataset : torch.utils.data.Dataset
+            The testing dataset.
+        batch_size : int
+            The batch size.
+        num_tasks : int
+            The number of tasks.
+        num_workers : int
+            The number of workers.
+        epoch_start : int
+            The epoch to start.
         epochs : int
-            The number of epochs to train for.
+            The number of epochs.
         step_size : int
-            The step size for the optimization.
-        log_interval : int
-            The number of batches to wait before logging.
+            The step size.
+        log_freqency : int
+            The frequency of logging.
         save_dir : str
             The directory to save the model.
-        lr_scheduler : torch.optim.lr_scheduler._LRScheduler
-            The learning rate scheduler.
+        use_amp : bool
+            Whether to use amp.
         '''
         super().__init__(model,
                          model_args,

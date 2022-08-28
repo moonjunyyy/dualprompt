@@ -49,7 +49,7 @@ class trainer():
         if model is None:
             raise ValueError("The model is not specified.")
         if train_dataset is None or test_dataset is None:
-            raise ValueError("train_dataset and test_dataset cannot be None.")
+            raise ValueError("train_dataset or test_dataset is not specified.")
 
         if torch.cuda.is_available() and torch.cuda.device_count() > 1:
             self.device       = torch.device("cuda")
@@ -60,15 +60,11 @@ class trainer():
             self.model        = model(device = self.device, **model_args).to(self.device)
             self.useMultiGPU  = False
 
-        if optimizer     is None:        
-            self.optimizer    = optim.SGD(self.model.parameters(), lr=0.01, momentum=0.9)
-        else:
-            self.optimizer    = optimizer(self.model.parameters(), **optimizer_args)
+        if optimizer is None : self.optimizer = optim.SGD(self.model.parameters(), lr=0.01, momentum=0.9)
+        else:                  self.optimizer = optimizer(self.model.parameters(), **optimizer_args)
 
-        if lr_scheduler  is None:        
-            self.lr_scheduler = torch.optim.lr_scheduler.ConstantLR(self.optimizer, 1.0)
-        else:
-            self.lr_scheduler = lr_scheduler(self.optimizer, **lr_schedul_args)
+        if lr_scheduler  is None : self.lr_scheduler = torch.optim.lr_scheduler.ConstantLR(self.optimizer, 1.0)
+        else:                      self.lr_scheduler = lr_scheduler(self.optimizer, **lr_schedul_args)
 
         self.batch_size       = batch_size
 
@@ -135,8 +131,7 @@ class trainer():
                 if (n % interval) == interval - 1       or n == length - 1:
                     self._print_log( "Train ", self.train_dataloader, n, False)
                     if self.writer is not None:
-                        for k,v in self._metrics.items():
-                            self._add_scalar(k, v)
+                        self._add_scalar("Train")
         print("")
         if self.save_dir is not None:
             self.save()
@@ -166,8 +161,7 @@ class trainer():
 
         self._print_log("Test ", self.train_dataloader, n, False)
         if self.writer is not None:
-            for k,v in self._metrics.items():
-                self._add_scalar(k, v)
+            self._add_scalar("Test")
         self._reset_metrics()
         return
     
@@ -237,7 +231,7 @@ class trainer():
             print("")        
         return
 
-    def _set_writer(self, name):
+    def _set_writer(self, name, **kwargs):
         if self.writer is not None:
             self.writer = SummaryWriter(os.path.join(self.save_dir, name))
         return
@@ -263,15 +257,11 @@ class trainer():
             self._metrics[k] = 0
         return
 
-    def _add_scalar(self, tag : str, scalar, **kwargs):
+    def _add_scalar(self, tag : str, **kwargs):
         r'''
         Set the writer of the model.
         '''
-        try:
-            i = self.writer_path[tag]
-        except:
-            self.writer_path[tag] = 0
-        self.writer.add_scalar(tag, scalar, self.writer_path[tag])
-        self.writer_path[tag] += 1
+        for k,v in self._metrics.items():
+            self.writer.add_scalar(tag + '/' + k, v / self._counts, self._counts)
         return
     
