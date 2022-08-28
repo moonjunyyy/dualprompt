@@ -17,6 +17,6 @@ l2p_argvs = {
     "--save-path"      : "saved/l2p/CIL",
     "--data-path"      : "/mnt/e/Datasets/CIFAR100/",
     "--backbone-name"  : "vit_base_patch16_224",
-
+    "--seed"           : None,
     "--debug"          : False,
 }

@@ -53,7 +53,7 @@ class trainer():
 
         if torch.cuda.is_available() and torch.cuda.device_count() > 1:
             self.device       = torch.device("cuda")
-            self.model        = nn.DataParallel(model(device = self.device, **model_args).to(self.device), range(0, torch.cuda.device_count()))
+            self.model        = nn.DataParallel(model(device = self.device, **model_args), range(0, torch.cuda.device_count()))
             self.useMultiGPU  = True
         else :
             self.device       = torch.device("cuda") if torch.cuda.is_available() else torch.device("cpu")
@@ -67,10 +67,16 @@ class trainer():
         else:                      self.lr_scheduler = lr_scheduler(self.optimizer, **lr_schedul_args)
 
         self.batch_size       = batch_size
+        self.epoch            = epoch_start
+        self.epochs           = epochs
+        self.step_size        = step_size * batch_size
+        self.log_freqency     = log_freqency
+        self.use_amp          = use_amp
+        self.scaler           = torch.cuda.amp.GradScaler(enabled = use_amp)
+        self.save_dir         = save_dir
 
         self.train_dataset    = train_dataset
         self.test_dataset     = test_dataset
-
         self.train_dataloader = DataLoader(train_dataset,
                                            batch_size=batch_size,
                                            num_workers=num_workers,
@@ -80,43 +86,32 @@ class trainer():
                                            num_workers=num_workers,
                                            shuffle=False, pin_memory_device=self.device)
 
-        self.epoch            = epoch_start
-        self.epochs           = epochs
-        self.step_size        = step_size * batch_size
-        self.log_freqency     = log_freqency
-        self.use_amp          = use_amp
-        self.scaler           = torch.cuda.amp.GradScaler(enabled = use_amp)
-        self.save_dir         = save_dir
-
         self._counts  = 0
         self._metrics = {}
 
         if save_dir is not None:
             self.load()
             self.writer       = SummaryWriter(log_dir = save_dir)
-            self.writer_path  = {}
-            self.writer_root  = ""
         else:
             self.writer       = None
         self._debug = debug
 
     def _train_a_epoch(self, **kwargs):
-
         self.model.train()
         length   = len(self.train_dataloader)
         interval = length // (self.log_freqency - 1)
-
         for n, batch in enumerate(self.train_dataloader):
             with torch.cuda.amp.autocast(enabled=self.use_amp) :
                 inputs, targets = batch
                 inputs  = inputs .to(self.device)
                 targets = targets.to(self.device)
-
                 inference = self.model(inputs)
+
                 if self.useMultiGPU:
                     metrics   = self.model.module.metrics (inference, targets)
                 else:
                     metrics   = self.model.metrics (inference, targets)
+
                 self.scaler.scale(metrics['loss']).backward()
                 self._set_metrics(**metrics)
 
@@ -124,10 +119,8 @@ class trainer():
                     self.scaler.step(self.optimizer)
                     self.scaler.update()
                     self.optimizer.zero_grad()
-                
                 if self._debug:
                     self._print_log( "Train ", self.train_dataloader, n, True)
-
                 if (n % interval) == interval - 1       or n == length - 1:
                     self._print_log( "Train ", self.train_dataloader, n, False)
                     if self.writer is not None:
@@ -140,7 +133,6 @@ class trainer():
         return
 
     def _test_a_epoch(self, **kwargs):
-
         self.model.eval()
         with torch.no_grad():
             for n, batch in enumerate(self.test_dataloader):
@@ -148,18 +140,17 @@ class trainer():
                 inputs, targets = batch
                 inputs  = inputs .to(self.device)
                 targets = targets.to(self.device)
-
                 inference = self.model(inputs)
+
                 if self.useMultiGPU:
                     metrics   = self.model.module.metrics (inference, targets)
                 else:
                     metrics   = self.model.metrics (inference, targets)
                 self._set_metrics(**metrics)
-
                 if self._debug:
-                    self._print_log("Test ", self.train_dataloader, n, True)
+                    self._print_log("Test ", self.test_dataloader, n, True)
 
-        self._print_log("Test ", self.train_dataloader, n, False)
+        self._print_log("Test ", self.test_dataloader, n, False)
         if self.writer is not None:
             self._add_scalar("Test")
         self._reset_metrics()

@@ -2,6 +2,7 @@ from distutils.log import debug
 from sqlite3 import paramstyle
 import sys
 
+import torch
 import torch.optim as optim
 import torchvision.transforms as transforms
 from torchvision.datasets import CIFAR100
@@ -30,10 +31,18 @@ def main(**kwargs):
     lr_scheduler   = kwargs["--lr-scheduler"]
     use_amp        = kwargs["--use-amp"]
     debug          = kwargs["--debug"]
+    seed           = kwargs["--seed"]
+
+    if seed is not None:
+        seed = int(seed)
+        torch.manual_seed(seed)
+        torch.cuda.manual_seed(seed)
+        torch.cuda.manual_seed_all(seed)
+        torch.backends.cudnn.deterministic = True
+        torch.backends.cudnn.benchmark = False
 
     transformCifar = transforms.Compose([transforms.Resize   (224),
                                          transforms.ToTensor ()])
-
     train_dataset = CIFAR100(DATA_PATH, download=True, train=True,  transform=transformCifar)
     test_dataset  = CIFAR100(DATA_PATH, download=True, train=False, transform=transformCifar)
 
