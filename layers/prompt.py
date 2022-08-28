@@ -33,8 +33,8 @@ class Prompt(nn.Module):
         match = F.cosine_similarity(query.unsqueeze(1), self.key, dim = -1)
 
         if self.training:
-            topk    = match
-            #topk    = (match * F.normalize(1 / self.frequency, p=1, dim=-1))
+            #topk    = match
+            topk    = (match * F.normalize(1 / self.frequency, p=1, dim=-1))
         else :
             topk    = match
 

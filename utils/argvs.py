@@ -2,7 +2,7 @@ l2p_argvs = {
     "--batchsize"      : 32,
     "--stepsize"       : 128,
     "--epochs"         : 5,
-    "--log-interval"   : 40,
+    "--log-freqency"   : 10,
     "--pool-size"      : 10,
     "--selection-size" : 5,
     "--prompt-len"     : 5,

@@ -1,7 +1,6 @@
 import os
 
 import matplotlib.pyplot as plt
-
 import torch
 import torch.nn as nn
 import torch.optim as optim
@@ -145,7 +144,7 @@ class trainer_til(trainer):
     def _dataset_mask(self,
                       cls     : list,
                       dataset : torch.utils.data.Dataset,
-                      *args, **kwargs) -> list:
+                      **kwargs) -> list:
         mask = (torch.tensor(dataset.targets) == cls.unsqueeze(-1)).sum(dim = -2).nonzero().squeeze()
         return mask
 
@@ -169,15 +168,21 @@ class trainer_til(trainer):
             self._test_a_epoch()
         print("")
 
-    def train(self, *args, **kwargs):
+    def train(self, **kwargs):
         for task_idx in range(self.num_tasks):
             print("Train for : ", task_idx)
 
             self._set_writer("Train/Task{}".format(task_idx))
-            self.model.task_mask(self._class_per_task[task_idx])
+            if self.useMultiGPU:
+                self.model.module.task_mask(self._class_per_task[task_idx])
+            else:
+                self.model.task_mask(self._class_per_task[task_idx])
             self._train_one_task(task_idx)
             
-            plt.bar(range(len(self.model.prompt.update().cpu().numpy())), self.model.prompt.update().cpu().numpy())
+            if self.useMultiGPU:
+                plt.bar(range(len(self.model.module.prompt.update().cpu().numpy())), self.model.module.prompt.update().cpu().numpy())
+            else:
+                plt.bar(range(len(self.model.prompt.update().cpu().numpy())),        self.model.prompt.update().cpu().numpy())
             plt.savefig(self.save_dir + '/' + 'selection'+ str(task_idx) +'.png')
             plt.clf()
             

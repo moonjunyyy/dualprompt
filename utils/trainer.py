@@ -53,10 +53,12 @@ class trainer():
 
         if torch.cuda.is_available() and torch.cuda.device_count() > 1:
             self.device       = torch.device("cuda")
-            self.model        = nn.DataParallel(model(device = self.device, **model_args).to(self.device), input, range(torch.cuda.device_count()))
+            self.model        = nn.DataParallel(model(device = self.device, **model_args).to(self.device), range(0, torch.cuda.device_count()))
+            self.useMultiGPU  = True
         else :
             self.device       = torch.device("cuda") if torch.cuda.is_available() else torch.device("cpu")
             self.model        = model(device = self.device, **model_args).to(self.device)
+            self.useMultiGPU  = False
 
         if optimizer     is None:        
             self.optimizer    = optim.SGD(self.model.parameters(), lr=0.01, momentum=0.9)
@@ -72,6 +74,7 @@ class trainer():
 
         self.train_dataset    = train_dataset
         self.test_dataset     = test_dataset
+
         self.train_dataloader = DataLoader(train_dataset,
                                            batch_size=batch_size,
                                            num_workers=num_workers,
@@ -101,10 +104,10 @@ class trainer():
             self.writer       = None
         self._debug = debug
 
-    def _train_a_epoch(self, *args, **kwargs):
+    def _train_a_epoch(self, **kwargs):
 
         self.model.train()
-        length   = len(self.train_dataloader.dataset)
+        length   = len(self.train_dataloader)
         interval = length // (self.log_freqency - 1)
 
         for n, batch in enumerate(self.train_dataloader):
@@ -114,7 +117,10 @@ class trainer():
                 targets = targets.to(self.device)
 
                 inference = self.model(inputs)
-                metrics   = self.model.metrics (inference, targets)
+                if self.useMultiGPU:
+                    metrics   = self.model.module.metrics (inference, targets)
+                else:
+                    metrics   = self.model.metrics (inference, targets)
                 self.scaler.scale(metrics['loss']).backward()
                 self._set_metrics(**metrics)
 
@@ -124,10 +130,10 @@ class trainer():
                     self.optimizer.zero_grad()
                 
                 if self._debug:
-                    self._print_log( "Train ", n, True)
+                    self._print_log( "Train ", self.train_dataloader, n, True)
 
-                if n % interval       == interval - 1       or n == length - 1:
-                    self._print_log( "Train ", n, False)
+                if (n % interval) == interval - 1       or n == length - 1:
+                    self._print_log( "Train ", self.train_dataloader, n, False)
                     if self.writer is not None:
                         for k,v in self._metrics.items():
                             self._add_scalar(k, v)
@@ -135,9 +141,10 @@ class trainer():
         if self.save_dir is not None:
             self.save()
         self.lr_scheduler.step()
+        self._reset_metrics()
         return
 
-    def _test_a_epoch(self, *args, **kwargs):
+    def _test_a_epoch(self, **kwargs):
 
         self.model.eval()
         with torch.no_grad():
@@ -148,16 +155,20 @@ class trainer():
                 targets = targets.to(self.device)
 
                 inference = self.model(inputs)
-                metrics   = self.model.metrics (inference, targets)
+                if self.useMultiGPU:
+                    metrics   = self.model.module.metrics (inference, targets)
+                else:
+                    metrics   = self.model.metrics (inference, targets)
                 self._set_metrics(**metrics)
 
                 if self._debug:
-                    self._print_log("Test ", n, True)
+                    self._print_log("Test ", self.train_dataloader, n, True)
 
-        self._print_log("Test ", n, False)
+        self._print_log("Test ", self.train_dataloader, n, False)
         if self.writer is not None:
             for k,v in self._metrics.items():
                 self._add_scalar(k, v)
+        self._reset_metrics()
         return
     
     def train(self, **kwargs):
@@ -207,25 +218,23 @@ class trainer():
             pass
         return
     
-    def _print_log(self, name, n, debug = False,**kwawrgs):
+    def _print_log(self, name, dataloader, n, debug = False, **kwawrgs):
+
         if debug:
             print('{} Epoch: {:3d} [{}/{:3d} ({:.0f}%)]'.format(name, self.epoch, 
-                (n + 1) *  self.batch_size if (n + 1) *  self.batch_size < len(self.test_dataloader.dataset) else len(self.test_dataloader.dataset),
-                len(self.test_dataloader.dataset), 100. * (n + 1) / len(self.test_dataloader)),end = "")
+                (n + 1) *  self.batch_size if (n + 1) *  self.batch_size < len(dataloader.dataset) else len(dataloader.dataset),
+                len(dataloader.dataset), 100. * (n + 1) / len(dataloader)),end = "")
             for k,v in self._metrics.items():
                 print("\t{}: {:.6f}".format(k, v / self._counts), end = "")
             print("", end="\r")
-            pass
 
         else:
             print('{} Epoch: {} [{}/{} ({:.0f}%)]'.format(name, self.epoch, 
-                (n + 1) *  self.batch_size if (n + 1) *  self.batch_size < len(self.test_dataloader.dataset) else len(self.test_dataloader.dataset),
-                len(self.test_dataloader.dataset), 100. * (n + 1) / len(self.test_dataloader)),end = "")
+                (n + 1) *  self.batch_size if (n + 1) *  self.batch_size < len(dataloader.dataset) else len(dataloader.dataset),
+                len(dataloader.dataset), 100. * (n + 1) / len(dataloader)),end = "")
             for k,v in self._metrics.items():
                 print("\t{}: {:.6f}".format(k, v / self._counts), end = "")
-            print("")
-            pass
-        
+            print("")        
         return
 
     def _set_writer(self, name):
@@ -262,8 +271,6 @@ class trainer():
             i = self.writer_path[tag]
         except:
             self.writer_path[tag] = 0
-
-        self.writer = SummaryWriter(log_dir = self.save_dir)
         self.writer.add_scalar(tag, scalar, self.writer_path[tag])
         self.writer_path[tag] += 1
         return

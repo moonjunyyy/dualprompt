@@ -20,7 +20,7 @@ def main(**kwargs):
     batch_per_step = step_size // batchsize
     backbone_name  = kwargs["--backbone-name"]
     epochs         = int(kwargs["--epochs"])
-    log_interval   = int(kwargs["--log-interval"])
+    log_freqency   = int(kwargs["--log-freqency"])
     pool_size      = int(kwargs["--pool-size"])
     selection_size = int(kwargs["--selection-size"])
     prompt_len     = int(kwargs["--prompt-len"])
@@ -37,29 +37,30 @@ def main(**kwargs):
     train_dataset = CIFAR100(DATA_PATH, download=True, train=True,  transform=transformCifar)
     test_dataset  = CIFAR100(DATA_PATH, download=True, train=False, transform=transformCifar)
 
-    train = trainer_til( model = L2P,
-                         model_args=
-                            {"pool_size" : pool_size,
-                            "selection_size" : selection_size,
-                            "prompt_len" : prompt_len,
-                            "dimention" : dimention,
-                            "class_num" : num_class,
-                            "backbone_name" : backbone_name},
-                         train_dataset = train_dataset,
-                         test_dataset = test_dataset,
-                         batch_size = batchsize,
-                         epochs = epochs,
-                         step_size = 1,
-                         log_freqency = 10,
-                         save_dir = MODEL_PATH,
-                         optimizer = optim.Adam,
-                         optimizer_args =
+    train = trainer_til( model           = L2P,
+                         model_args      =
+                            {"pool_size"     : pool_size,
+                             "selection_size": selection_size,
+                             "prompt_len"    : prompt_len,
+                             "dimention"     : dimention,
+                             "class_num"     : num_class,
+                             "backbone_name" : backbone_name},
+                         train_dataset   = train_dataset,
+                         test_dataset    = test_dataset,
+                         batch_size      = batchsize,
+                         epochs          = epochs,
+                         num_tasks       = num_tasks,
+                         step_size       = 1,
+                         log_freqency    = log_freqency,
+                         save_dir        = MODEL_PATH,
+                         optimizer       = optim.Adam,
+                         optimizer_args  =
                             {"lr"    : 0.03,
                              "betas" : (0.9, 0.999)},
-                         lr_scheduler = None,
+                         lr_scheduler    = None,
                          lr_schedul_args = None,
-                         use_amp = use_amp,
-                         debug = debug)
+                         use_amp         = use_amp,
+                         debug           = debug)
     train.train()
 
 if __name__ == "__main__":
