@@ -197,3 +197,4 @@ class trainer_til(trainer):
             
             self._set_writer("Test/Task{}".format(task_idx))
             self._test_one_task (task_idx)
+            self.optimizer.load_state_dict(self.optim_init_dict)

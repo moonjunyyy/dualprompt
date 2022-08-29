@@ -53,7 +53,7 @@ class trainer():
 
         if torch.cuda.is_available() and torch.cuda.device_count() > 1:
             self.device       = torch.device("cuda")
-            self.model        = nn.DataParallel(model(device = self.device, **model_args), range(0, torch.cuda.device_count()))
+            self.model        = nn.DataParallel(model(device = self.device, **model_args).to(self.device), range(0, torch.cuda.device_count()))
             self.useMultiGPU  = True
         else :
             self.device       = torch.device("cuda") if torch.cuda.is_available() else torch.device("cpu")
@@ -62,6 +62,7 @@ class trainer():
 
         if optimizer is None : self.optimizer = optim.SGD(self.model.parameters(), lr=0.01, momentum=0.9)
         else:                  self.optimizer = optimizer(self.model.parameters(), **optimizer_args)
+        self.optim_init_dict  = self.optimizer.state_dict()
 
         if lr_scheduler  is None : self.lr_scheduler = torch.optim.lr_scheduler.ConstantLR(self.optimizer, 1.0)
         else:                      self.lr_scheduler = lr_scheduler(self.optimizer, **lr_schedul_args)
@@ -99,7 +100,7 @@ class trainer():
     def _train_a_epoch(self, **kwargs):
         self.model.train()
         length   = len(self.train_dataloader)
-        interval = length // (self.log_freqency - 1)
+        interval = length // self.log_freqency
         for n, batch in enumerate(self.train_dataloader):
             with torch.cuda.amp.autocast(enabled=self.use_amp) :
                 inputs, targets = batch
