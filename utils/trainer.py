@@ -3,6 +3,7 @@ import os
 import torch
 import torch.nn as nn
 import torch.optim as optim
+
 from torch.optim.lr_scheduler import _LRScheduler
 from torch.utils.data import DataLoader, Dataset
 from torch.utils.tensorboard import SummaryWriter
@@ -60,6 +61,7 @@ class trainer():
             self.model        = model(device = self.device, **model_args).to(self.device)
             self.useMultiGPU  = False
 
+        self.optimfn = optim.SGD if optimizer is None else optimizer
         if optimizer is None : self.optimizer = optim.SGD(self.model.parameters(), lr=0.01, momentum=0.9)
         else:                  self.optimizer = optimizer(self.model.parameters(), **optimizer_args)
         self.optim_init_dict  = self.optimizer.state_dict()
@@ -93,9 +95,23 @@ class trainer():
         if save_dir is not None:
             self.load()
             self.writer       = SummaryWriter(log_dir = save_dir)
+            self.tag_counter  = {}
         else:
             self.writer       = None
         self._debug = debug
+
+
+
+    def train(self, **kwargs):
+        r'''
+        Train the model.
+        '''
+        for self.epoch in range(1, self.epochs + 1):
+            self._set_writer("Train/")
+            self._train_a_epoch(self.train_dataloader)
+            self._set_writer("Test/")
+            self._test_a_epoch (self.test_dataloader)
+        return
 
     def _train_a_epoch(self, **kwargs):
         self.model.train()
@@ -156,54 +172,7 @@ class trainer():
             self._add_scalar("Test")
         self._reset_metrics()
         return
-    
-    def train(self, **kwargs):
-        r'''
-        Train the model.
-        '''
-        for self.epoch in range(1, self.epochs + 1):
-            self._set_writer("Train/")
-            self._train_a_epoch(self.train_dataloader)
-            self._set_writer("Test/")
-            self._test_a_epoch (self.test_dataloader)
-        return
 
-    def save(self, **kwargs):
-        r'''
-        Save the model.
-        '''
-        torch.save({
-            'epoch'                  : self.epoch,
-            'model_state_dict'       : self.model.state_dict(),
-            'optimizer_state_dict'   : self.optimizer.state_dict(),
-            'scaler_state_dict'      : self.scaler.state_dict(),
-            'lr_scheduler_state_dict': self.lr_scheduler.state_dict(),
-            'metrics'                : self._metrics,
-            'step'                   : self._counts,
-        }, os.path.join(self.save_dir, 'checkpoint_{}.pth'.format(self.epoch)))
-        return
-
-    def load(self, *args, **kwargs):
-        r'''
-        Load the model.
-        '''
-        try:
-            for e in range(self.epochs + 1):
-                load_dict = torch.load(os.path.join(self.save_dir, 'checkpoint_{}.pth'.format(e)))
-        except:
-            pass
-        try:
-            self.model.load_state_dict       (load_dict['model_state_dict'])
-            self.optimizer.load_state_dict   (load_dict['optimizer_state_dict'])
-            self.scaler.load_state_dict      (load_dict['scaler_state_dict'])
-            self.lr_scheduler.load_state_dict(load_dict['lr_scheduler_state_dict'])
-            self.epoch      = load_dict['epoch']
-            self._metrics   = load_dict['metrics']
-            self._counts      = load_dict['step']
-        except:
-            pass
-        return
-    
     def _print_log(self, name, dataloader, n, debug = False, **kwawrgs):
 
         if debug:
@@ -253,7 +222,48 @@ class trainer():
         r'''
         Set the writer of the model.
         '''
+        try:
+            i = self.tag_counter[tag]
+        except:
+            self.tag_counter[tag] = 0
+
         for k,v in self._metrics.items():
-            self.writer.add_scalar(tag + '/' + k, v / self._counts, self._counts)
+            self.writer.add_scalar(tag + '/' + k, v / self._counts, self.tag_counter[tag])
+        return
+
+    def save(self, **kwargs):
+        r'''
+        Save the model.
+        '''
+        torch.save({
+            'epoch'                  : self.epoch,
+            'model_state_dict'       : self.model.state_dict(),
+            'optimizer_state_dict'   : self.optimizer.state_dict(),
+            'scaler_state_dict'      : self.scaler.state_dict(),
+            'lr_scheduler_state_dict': self.lr_scheduler.state_dict(),
+            'metrics'                : self._metrics,
+            'step'                   : self._counts,
+        }, os.path.join(self.save_dir, 'checkpoint_{}.pth'.format(self.epoch)))
+        return
+
+    def load(self, *args, **kwargs):
+        r'''
+        Load the model.
+        '''
+        try:
+            for e in range(self.epochs + 1):
+                load_dict = torch.load(os.path.join(self.save_dir, 'checkpoint_{}.pth'.format(e)))
+        except:
+            pass
+        try:
+            self.model.load_state_dict       (load_dict['model_state_dict'])
+            self.optimizer.load_state_dict   (load_dict['optimizer_state_dict'])
+            self.scaler.load_state_dict      (load_dict['scaler_state_dict'])
+            self.lr_scheduler.load_state_dict(load_dict['lr_scheduler_state_dict'])
+            self.epoch      = load_dict['epoch']
+            self._metrics   = load_dict['metrics']
+            self._counts      = load_dict['step']
+        except:
+            pass
         return
     
