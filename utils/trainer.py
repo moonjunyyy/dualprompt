@@ -54,11 +54,14 @@ class trainer():
 
         if torch.cuda.is_available() and torch.cuda.device_count() > 1:
             self.device       = torch.device("cuda")
-            self.model        = nn.DataParallel(model(device = self.device, **model_args).to(self.device), range(0, torch.cuda.device_count()))
+            self.model        = nn.DataParallel(model(device = self.device, **model_args).cuda(), range(0, torch.cuda.device_count()))
             self.useMultiGPU  = True
         else :
             self.device       = torch.device("cuda") if torch.cuda.is_available() else torch.device("cpu")
-            self.model        = model(device = self.device, **model_args).to(self.device)
+            if torch.cuda.is_available():
+                self.model        = model(device = self.device, **model_args).cuda()
+            else:
+                self.model        = model(device = self.device, **model_args).cpu()                
             self.useMultiGPU  = False
 
         self.optimfn = optim.SGD if optimizer is None else optimizer
