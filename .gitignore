@@ -1,7 +1,12 @@
-.venv
-**/__pycache__
-run
-saved
+# Ignore Virtual Environment
+.venv/
+
+# Ignore Python System Code
+**/__pycache__/
+
+# Ignore Output And Test Files
+saved/
+run/
 test.py
 *.out
 *.err
