@@ -101,6 +101,7 @@ class DualPrompt(L2P):
             x = x + self.past_class.to(x.device)
         if not self.training:
             x = F.softmax(x, dim = -1)
+
         self.simmilairty = _simmilarity.sum() / x.size()[0]
         return x
     
@@ -136,11 +137,11 @@ class DualPrompt(L2P):
             bias = attn.qkv.bias
 
             B, N, C = x.shape
-            x  = F.linear(x,  wght[:C   ,:], bias[:C   ]).reshape(B,  N, attn.num_heads, C // attn.num_heads).permute(2, 0, 1, 3)
+            x  = F.linear(x,  wght[:C   ,:], bias[:C   ]).reshape(B,  N, attn.num_heads, C // attn.num_heads).permute(0, 2, 1, 3)
             _B, _N, _C = xk.shape
-            xk = F.linear(xk, wght[C:2*C,:], bias[C:2*C]).reshape(B, _N, attn.num_heads, C // attn.num_heads).permute(2, 0, 1, 3)
+            xk = F.linear(xk, wght[C:2*C,:], bias[C:2*C]).reshape(B, _N, attn.num_heads, C // attn.num_heads).permute(0, 2, 1, 3)
             _B, _N, _C = xv.shape
-            xv = F.linear(xv, wght[2*C: ,:], bias[2*C: ]).reshape(B, _N, attn.num_heads, C // attn.num_heads).permute(2, 0, 1, 3)
+            xv = F.linear(xv, wght[2*C: ,:], bias[2*C: ]).reshape(B, _N, attn.num_heads, C // attn.num_heads).permute(0, 2, 1, 3)
 
             attention = (x @ xk.transpose(-2, -1)) * attn.scale
             attention = attention.softmax(dim=-1)
