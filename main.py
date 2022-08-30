@@ -8,7 +8,7 @@ from torchvision.datasets import CIFAR100
 
 from models.L2P import L2P
 from utils.argvs import l2p_argvs
-from utils.trainer_continual import trainer_til, trainer_til_DDP
+from utils.trainer_continual import trainer_til
 
 def main(**kwargs):
 
@@ -45,7 +45,7 @@ def main(**kwargs):
     train_dataset = CIFAR100(DATA_PATH, download=True, train=True,  transform=transformCifar)
     test_dataset  = CIFAR100(DATA_PATH, download=True, train=False, transform=transformCifar)
 
-    train = trainer_til_DDP( model           = L2P,
+    train = trainer_til( model           = L2P,
                          model_args      =
                             {"pool_size"     : pool_size,
                              "selection_size": selection_size,
@@ -70,8 +70,7 @@ def main(**kwargs):
                          use_amp         = use_amp,
                          debug           = debug)
 
-    world_size = 1
-    mp.spawn(train.train, args=(world_size,), nprocs=world_size, join=True)
+    train.train()
 
 if __name__ == "__main__":
     for n, name in enumerate(sys.argv):

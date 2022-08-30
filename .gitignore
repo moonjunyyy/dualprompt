@@ -3,3 +3,6 @@ run
 saved
 test.py
 */__pycache__
+*.out
+*.err
+*.pyc
