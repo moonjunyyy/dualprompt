@@ -2,13 +2,13 @@ import sys
 
 import torch
 import torch.optim as optim
-import torch.multiprocessing as mp
 import torchvision.transforms as transforms
 from torchvision.datasets import CIFAR100
 
 from models.L2P import L2P
+from models.dualprompt import DualPrompt
 from utils.argvs import l2p_argvs
-from utils.trainer_continual import trainer_til, trainer_til_DDP
+from utils.trainer_continual import trainer_til
 
 def main(**kwargs):
 
@@ -45,12 +45,15 @@ def main(**kwargs):
     train_dataset = CIFAR100(DATA_PATH, download=True, train=True,  transform=transformCifar)
     test_dataset  = CIFAR100(DATA_PATH, download=True, train=False, transform=transformCifar)
 
-    train = trainer_til_DDP( model           = L2P,
+    train = trainer_til( model           = DualPrompt,
                          model_args      =
-                            {"pool_size"     : pool_size,
-                             "selection_size": selection_size,
-                             "prompt_len"    : prompt_len,
-                             "dimention"     : dimention,
+                            {"dimention"     : dimention,
+                             "task_num"      : num_tasks,
+                             "pos_g_prompt"  : (1,2),
+                             "len_g_prompt"  : 5,
+                             "pos_e_prompt"  : (3,4,5),
+                             "len_e_prompt"  : 20,
+                             "prompt_func"   : "prefix_tuning",
                              "class_num"     : num_class,
                              "backbone_name" : backbone_name},
                          train_dataset   = train_dataset,
@@ -63,15 +66,13 @@ def main(**kwargs):
                          save_dir        = MODEL_PATH,
                          optimizer       = optim.Adam,
                          optimizer_args  =
-                            {"lr"    : 0.03,
+                            {"lr"    : 0.005,
                              "betas" : (0.9, 0.999)},
                          lr_scheduler    = None,
                          lr_schedul_args = None,
                          use_amp         = use_amp,
                          debug           = debug)
-
-    world_size = 1
-    mp.spawn(train.train, args=(world_size,), nprocs=world_size, join=True)
+    train.train()
 
 if __name__ == "__main__":
     for n, name in enumerate(sys.argv):

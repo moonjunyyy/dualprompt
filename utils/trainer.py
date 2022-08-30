@@ -229,6 +229,7 @@ class trainer():
 
         for k,v in self._metrics.items():
             self.writer.add_scalar(tag + '/' + k, v / self._counts, self.tag_counter[tag])
+        self.tag_counter[tag] += 1
         return
 
     def save(self, **kwargs):

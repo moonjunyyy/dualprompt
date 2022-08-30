@@ -79,11 +79,11 @@ class trainer_DDP(trainer):
         self.train_dataloader = DataLoader(train_dataset,
                                            batch_size=batch_size,
                                            num_workers=num_workers,
-                                           shuffle=True, pin_memory_device=self.device)
+                                           shuffle=True)
         self.test_dataloader  = DataLoader(test_dataset,
                                            batch_size=batch_size,
                                            num_workers=num_workers,
-                                           shuffle=False, pin_memory_device=self.device)
+                                           shuffle=False)
 
         self._counts  = 0
         self._metrics = {}
@@ -100,6 +100,7 @@ class trainer_DDP(trainer):
         self.model = self.model_fn(**self.model_args).to(rank)
         self.model = DDP(self.model, device_ids=[rank])
         self.optimizer = self.optimizer_fn(self.model.parameters(), **self.optimizer_args)
+        self.optim_init_dict = self.optimizer.state_dict()
         self.lr_scheduler = self.lr_scheduler_fn(self.optimizer, **self.lr_schedul_args)
         return
 

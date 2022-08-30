@@ -8,16 +8,20 @@ T = TypeVar('T', bound = 'nn.Module')
 
 class L2P(nn.Module):
     def __init__(self,
-                 pool_size      : int,
-                 selection_size : int,
-                 dimention      : int,
-                 prompt_len     : int,
-                 class_num      : int,
-                 backbone_name  : str,
-                 device         : torch.device,
+                 pool_size      : int   = 10,
+                 selection_size : int   = 5,
+                 dimention      : int   = None,
+                 prompt_len     : int   = 5,
+                 class_num      : int   = 100,
+                 backbone_name  : str   = None,
+                 device         : torch.device = torch.device('cpu'),
                  **kwargs):
 
         super(L2P, self).__init__()
+        if dimention is None:
+            raise ValueError('dimention must be specified')
+        if backbone_name is None:
+            raise ValueError('backbone_name must be specified')
 
         self.selection_size = selection_size
         self.prompt_len     = prompt_len
