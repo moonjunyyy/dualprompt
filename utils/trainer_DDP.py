@@ -12,7 +12,6 @@ from torch.utils.tensorboard import SummaryWriter
 
 from utils.trainer import trainer
 
-
 class trainer_DDP(trainer):
     def __init__(self,
                  model          : nn.Module         = None,
@@ -96,11 +95,15 @@ class trainer_DDP(trainer):
         self._debug = debug
 
     def _initialize_model(self, rank, world_size, **kwargs):
+
         dist.init_process_group(backend='gloo', rank=rank, world_size=world_size)
+
         self.model = self.model_fn(**self.model_args).to(rank)
         self.model = DDP(self.model, device_ids=[rank])
+
         self.optimizer = self.optimizer_fn(self.model.parameters(), **self.optimizer_args)
         self.optim_init_dict = self.optimizer.state_dict()
+        
         self.lr_scheduler = self.lr_scheduler_fn(self.optimizer, **self.lr_schedul_args)
         return
 
