@@ -99,8 +99,6 @@ class DualPrompt(L2P):
 
         if self.training:
             x = x + self.past_class.to(x.device)
-        if not self.training:
-            x = F.softmax(x, dim = -1)
 
         self.simmilairty = _simmilarity.sum() / x.size()[0]
         return x

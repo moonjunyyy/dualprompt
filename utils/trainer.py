@@ -111,6 +111,7 @@ class trainer():
         self.test_dataset    = self.dataset(self.dataset_path, download=True, train=False, transform=transform)
         self._class_per_task = self._class_split()
         self._task_id        = 0
+        self._test_id        = 0
         self.log_interval    = 0
 
     def __call__(self, **kwargs):
@@ -134,19 +135,15 @@ class trainer():
             self._worker(self.gpu, ngpus_per_node)
         return
 
-    def _convert_task(self, task_idx = -1, test_idx = -1):
+    def _convert_task(self, task_idx):
         r'''
         Convert the task index to the task index of the next epoch.
         '''
         if task_idx != -1:
             self.taskID = task_idx
-        if test_idx != -1:
-            self.testID = test_idx
         train = Subset(self.train_dataset, self._dataset_mask(self._class_per_task[task_idx], self.train_dataset))
-        test  = Subset(self.test_dataset,  self._dataset_mask(self._class_per_task[test_idx], self.test_dataset))
         if self.distributed:
             train_sampler = DistributedSampler(train)
-            test_sampler  = DistributedSampler(test, shuffle=False, drop_last=True)
         else:   
             train_sampler = None
             test_sampler  = None
@@ -154,6 +151,17 @@ class trainer():
         self.train_loader = DataLoader(
             train, batch_size=self.batchsize, shuffle=(train_sampler is None),
             num_workers=self.num_workers, pin_memory=True, sampler=train_sampler)
+
+    def _convert_test(self, test_idx):
+        r'''
+        Convert the task index to the task index of the next epoch.
+        '''
+        self.testID = test_idx
+        test  = Subset(self.test_dataset,  self._dataset_mask(self._class_per_task[test_idx], self.test_dataset))
+        if self.distributed:
+            test_sampler  = DistributedSampler(test, shuffle=False, drop_last=True)
+        else:   
+            test_sampler  = None
         self.test_loader = DataLoader(
             test, batch_size=self.batchsize, shuffle=False,
             num_workers=self.num_workers, pin_memory=True, sampler=test_sampler)
@@ -269,15 +277,18 @@ class trainer():
             return
 
         for task in range(self.num_tasks):
-            self._convert_task(task, task)
-            Log.log_info('=> Task {} :'.format(task))
+            self._convert_task(task)
+            Log.log('=> Task {} :'.format(task))
             for epoch in range(self.epoch, self.epochs):
                 if self.distributed:
                     train_sampler.set_epoch(epoch)
                 # train for one epoch
                 self.train(self.train_loader, model, criterion, optimizer, epoch)
                 # evaluate on validation set
-                acc1 = self.validate(self.test_loader, model, criterion)
+                for test in range(task + 1):
+                    self._convert_test(test)
+                    Log.log('==> test for Task {} :'.format(task))
+                    acc1 = self.validate(self.test_loader, model, criterion)
                 scheduler.step()
 
         #setting up the distributed environment
@@ -389,53 +400,6 @@ class trainer():
 
         return top1.avg
 
-
-    def _prepare_model(self, gpu, ngpus_per_node):
-        Log.log("Initializing model...")
-        model = model_fn(**model_args)
-        if self.mode == 'cpu':
-            Log.log_warning("Using CPU, it will be very slow...")
-            model = model.cpu()
-        elif self.mode == 'ddp':
-            if gpu is not None:
-                torch.cuda.set_device(gpu)
-                model = model.cuda(gpu)
-                self.batchsize = int(self.batchsize / ngpus_per_node)
-                self.num_workers = int((self.num_workers + ngpus_per_node - 1) / ngpus_per_node)
-                model = torch.nn.parallel.DistributedDataParallel(model, device_ids=[gpu])
-            else:
-                model = model.cuda()
-                model = torch.nn.parallel.DistributedDataParallel(model)
-        elif gpu is not None:
-            torch.cuda.set_device(gpu)
-            model = model.cuda(gpu)
-        else:
-            model = torch.nn.DataParallel(model)
-        
-        Log.log("Initializing optimizer...")
-        self.criterion = self.criterion_fn().cuda(gpu)
-        self.optimizer = self.optimizer_fn(model.parameters(),
-                                           **self.optimizer_args)
-        self.scheduler = self.scheduler_fn(self.optimizer,
-                                           **self.scheduler_args)
-        return
-    def _prepare_datasets(self):
-        #setting up the dataset
-        transform = transforms.Compose([transforms.Resize(224),
-                                        transforms.ToTensor ()])
-        self.train_dataset = self.dataset(self.dataset_path, download=True, train=True,  transform=transform)
-        self.test_dataset  = self.dataset(self.dataset_path, download=True, train=False, transform=transform)
-
-        self.train_sampler = DistributedSampler(self.train_dataset)
-        self.test_sampler  = DistributedSampler(self.test_dataset, shuffle=False, drop_last=True)
-        
-        self.train_loader = DataLoader(
-            self.train_dataset, batch_size=self.batchsize, shuffle=(self.train_sampler is None),
-            num_workers=self.num_workers, pin_memory=True, sampler=self.train_sampler)
-        self.test_loader = DataLoader(
-            self.test_dataset, batch_size=self.batchsize, shuffle=False,
-            num_workers=self.num_workers, pin_memory=True, sampler=self.test_sampler)
-
     def _dataset(self, _data : str) -> Dataset:
         if _data == 'CIFAR100':
             self.model_args["class_num"] = 100
@@ -458,7 +422,7 @@ class trainer():
         '''
         torch.save({
             'epoch'                : self.epoch,
-            'model_state_dict'     : model.state_dict(),
+            'model_state_dict'     : self.model.state_dict(),
             'optimizer_state_dict' : self.optimizer.state_dict(),
             'scaler_state_dict'    : self.scaler.state_dict(),
             'scheduler_state_dict' : self.scheduler.state_dict(),
@@ -477,7 +441,7 @@ class trainer():
         except:
             pass
         try:
-            model.load_state_dict       (load_dict['model_state_dict'])
+            self.model.load_state_dict       (load_dict['model_state_dict'])
             self.optimizer.load_state_dict   (load_dict['optimizer_state_dict'])
             self.scaler.load_state_dict      (load_dict['scaler_state_dict'])
             self.scheduler.load_state_dict   (load_dict['scheduler_state_dict'])
