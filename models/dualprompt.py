@@ -155,3 +155,14 @@ class DualPrompt(L2P):
         
     def loss_fn(self, output, target, **kwargs):
         return F.cross_entropy(output, target) - 1 * self.simmilairty
+
+    def to(self, device, **kwargs):
+        super().to(device, **kwargs)
+        self.backbone = self.backbone.to(device)
+        self.classifier = self.classifier.to(device)
+        self.prompt_func.to(device)
+        if self.g_prompt is not None:
+            self.g_prompt = self.g_prompt.to(device)
+        if self.e_prompt is not None:
+            self.e_prompt = self.e_prompt.to(device)
+        return self

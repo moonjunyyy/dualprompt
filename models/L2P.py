@@ -80,6 +80,7 @@ class L2P(nn.Module):
         return (output.argmax(dim = 1) == target).sum()/ output.size()[0]
 
     def get_task(self, task : torch.Tensor, **kwargs):
+        task = task.to(self.past_class.device)
         self.past_class += -torch.inf
         self.past_class[task] = 0
         return self.past_class
@@ -92,4 +93,13 @@ class L2P(nn.Module):
     def freeze_classifier(self, mask : torch.Tensor, **kwargs):
         for param in self.classifier.parameters():
             param.requires_grad = False
+        return self
+
+    def to(self, device : torch.device, **kwargs):
+        super().to(device, **kwargs)
+        self.backbone = self.backbone.to(device)
+        self.prompt = self.prompt.to(device)
+        self.avgpool = self.avgpool.to(device)
+        self.past_class = self.past_class.to(device)
+        self.classifier = self.classifier.to(device)
         return self
