@@ -34,11 +34,11 @@ class Log():
     def log(msg):
         if Log.show_time:
             msg = time.strftime("%H:%M:%S") + " " + msg
-        if Log.use_consoLe:
+        if Log.use_console:
             print(msg)
-        if Log.use_fiLes:
-            for fiLe_path in Log.fiLe_path:
-                with open(fiLe_path, 'a') as f:
+        if Log.use_files:
+            for file_path in Log.file_path:
+                with open(file_path, 'a') as f:
                     f.write(msg + '\n')
         if Log.store_str:
             Log.store_str += msg + '\n'
