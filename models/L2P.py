@@ -79,9 +79,9 @@ class L2P(nn.Module):
     def accuracy(self, output, target, **kwargs):
         return (output.argmax(dim = 1) == target).sum()/ output.size()[0]
 
-    def task_mask(self, mask : torch.Tensor, **kwargs):
+    def get_task(self, task : torch.Tensor, **kwargs):
         self.past_class += -torch.inf
-        self.past_class[mask] = 0
+        self.past_class[task] = 0
         return self.past_class
 
     def train(self: T, mode: bool = True, **kwargs) -> T:

@@ -283,6 +283,14 @@ class trainer():
                 if self.distributed:
                     train_sampler.set_epoch(epoch)
                 # train for one epoch
+                try :
+                    model.module.get_task(self._class_per_task[task])
+                except Exception as e:
+                    continue
+                try :
+                    model.get_task(self._class_per_task[task])
+                except Exception as e:
+                    continue
                 self.train(self.train_loader, model, criterion, optimizer, epoch)
                 # evaluate on validation set
                 for test in range(task + 1):
