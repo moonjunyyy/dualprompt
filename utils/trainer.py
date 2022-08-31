@@ -287,11 +287,11 @@ class trainer():
                 try :
                     model.module.get_task(self._class_per_task[task])
                 except Exception as e:
-                    continue
+                    pass
                 try :
                     model.get_task(self._class_per_task[task])
                 except Exception as e:
-                    continue
+                    pass
                 self.train(self.train_loader, model, criterion, optimizer, epoch)
                 Log.log('')
                 # evaluate on validation set
