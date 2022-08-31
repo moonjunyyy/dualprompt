@@ -150,8 +150,8 @@ class DualPrompt(L2P):
             x = attn.proj(x)
             x = attn.proj_drop(x)
 
-            x = r + block.drop_path1(block.ls1(x))
-            x = x + block.drop_path2(block.ls2(block.mlp(block.norm2(x))))
+            x = r + block.drop_path(x)
+            x = x + block.drop_path(block.mlp(block.norm2(x)))
 
         return x
         
