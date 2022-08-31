@@ -287,7 +287,7 @@ class trainer():
                 # evaluate on validation set
                 for test in range(task + 1):
                     self._convert_test(test)
-                    Log.log('==> test for Task {} :'.format(task))
+                    Log.log('==> test for Task {} :'.format(test))
                     acc1 = self.validate(self.test_loader, model, criterion)
                 scheduler.step()
 
