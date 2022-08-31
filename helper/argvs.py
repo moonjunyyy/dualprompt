@@ -54,8 +54,7 @@ def parse_args(args : list):
     parse = parser.parse_known_args(args)
     parse, args = parse
     parse = vars(parse)
-    print(parse)
-
+    
     parse["model"], (parse["model_args"], args) = model_parser(parse["model"], args)
     parse["model_args"] = vars(parse["model_args"])
 

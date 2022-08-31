@@ -1,10 +1,9 @@
 import time
 
 class Log():
-
-    use_consoLe = True
-    use_fiLes   = True
-    fiLe_path   = []
+    use_console = False
+    use_files   = False
+    file_path   = []
     store_str   = False
     
     _Log = ""
@@ -19,6 +18,17 @@ class Log():
 
     def __init__(seLf, **kwargs):
         pass
+    
+    @staticmethod
+    def log_init(consoLe = False, file = None, str = False):
+        Log.use_console = consoLe
+        Log.use_files   = file is not None
+        Log.file_path   = file
+        Log.store_str   = str
+        if Log.use_files:
+            for file_path in Log.file_path:
+                with open(file_path, 'w') as file:
+                    pass
 
     @staticmethod
     def log(msg):
