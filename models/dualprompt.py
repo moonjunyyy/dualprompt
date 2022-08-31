@@ -21,7 +21,7 @@ class DualPrompt(L2P):
                                          class_num= class_num,
                                          backbone_name= backbone_name,
                                          device= device, **kwargs)
-
+                                         
         del(self.prompt)
         del(self.avgpool) 
         del(self.selection_size)

@@ -7,7 +7,7 @@ from torchvision.datasets import CIFAR100
 
 from models.L2P import L2P
 from models.dualprompt import DualPrompt
-from utils.argvs import l2p_argvs
+from helper.argvs import l2p_argvs
 from utils.trainer_continual import trainer_til
 
 def main(**kwargs):

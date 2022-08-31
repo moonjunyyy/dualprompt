@@ -10,7 +10,6 @@ class L2P(nn.Module):
     def __init__(self,
                  pool_size      : int   = 10,
                  selection_size : int   = 5,
-                 dimention      : int   = None,
                  prompt_len     : int   = 5,
                  class_num      : int   = 100,
                  backbone_name  : str   = None,
@@ -18,28 +17,27 @@ class L2P(nn.Module):
                  **kwargs):
 
         super(L2P, self).__init__()
-        if dimention is None:
-            raise ValueError('dimention must be specified')
         if backbone_name is None:
             raise ValueError('backbone_name must be specified')
 
         self.selection_size = selection_size
         self.prompt_len     = prompt_len
         self.class_num      = class_num
-        self.dimention      = dimention
         
         self.backbone = timm.create_model(backbone_name, pretrained=True)
         self.add_module('backbone', self.backbone)
         for param in self.backbone.parameters():
             param.requires_grad = False
 
-        self.prompt         = Prompt(pool_size, selection_size, prompt_len, dimention, device)
+        self.dimention      = self.backbone.embed_dim
+
+        self.prompt         = Prompt(pool_size, selection_size, prompt_len, self.dimention, device)
         self.simmilairty    = 0.0
-        self.avgpool        = nn.AdaptiveAvgPool2d((1,dimention))
+        self.avgpool        = nn.AdaptiveAvgPool2d((1, self.dimention))
 
         self.past_class     = torch.zeros(class_num, device = device)
 
-        self.classifier        = nn.Linear     (dimention, class_num,   device = device)
+        self.classifier        = nn.Linear     (self.dimention, class_num,   device = device)
         self.classifier.weight = nn.init.zeros_(self.classifier.weight)
         self.classifier.bias   = nn.init.zeros_(self.classifier.bias)
 
