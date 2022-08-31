@@ -1,6 +1,6 @@
-from cmath import log
 import os
 import sys
+import time
 
 import torch
 import torch.optim as optim
@@ -17,6 +17,7 @@ def main(**kwargs):
     train = trainer(**kwargs)
     train.run()
     print(Log._Log)
+    time.sleep(60)
 
 if __name__ == "__main__":
     main(**parse_args(sys.argv))
