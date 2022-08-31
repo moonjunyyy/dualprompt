@@ -278,6 +278,7 @@ class trainer():
 
         for task in range(self.num_tasks):
             self._convert_task(task)
+            Log.log('')
             Log.log('=> Task {} :'.format(task))
             for epoch in range(self.epoch, self.epochs):
                 if self.distributed:
@@ -292,6 +293,7 @@ class trainer():
                 except Exception as e:
                     continue
                 self.train(self.train_loader, model, criterion, optimizer, epoch)
+                Log.log('')
                 # evaluate on validation set
                 for test in range(task + 1):
                     self._convert_test(test)
