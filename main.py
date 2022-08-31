@@ -16,6 +16,7 @@ def main(**kwargs):
     Log.log_init(**_log_op)
     train = trainer(**kwargs)
     train.run()
+    print(Log._Log)
 
 if __name__ == "__main__":
     main(**parse_args(sys.argv))

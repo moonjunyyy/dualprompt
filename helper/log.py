@@ -20,8 +20,8 @@ class Log():
         pass
     
     @staticmethod
-    def log_init(consoLe = False, file = None, str = False):
-        Log.use_console = consoLe
+    def log_init(console = False, file = None, str = False):
+        Log.use_console = console
         Log.use_files   = file is not None
         Log.file_path   = file
         Log.store_str   = str
