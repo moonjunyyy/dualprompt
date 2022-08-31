@@ -42,7 +42,7 @@ class L2P(nn.Module):
         self.classifier.bias   = nn.init.zeros_(self.classifier.bias)
 
     def forward(self, inputs : torch.Tensor, **kwargs):
-
+        inputs = inputs.to(self.device)
         x = self.backbone.patch_embed(inputs)
         cls_token = self.backbone.cls_token.expand(x.shape[0], -1, -1)
         x = torch.cat((cls_token, x), dim=1)
