@@ -29,15 +29,8 @@ class L2P(nn.Module):
         for param in self.backbone.parameters():
             param.requires_grad = False
 
-        if backbone_name.find('tiny') != -1:
-            self.dimention      = 192
-        elif backbone_name.find('small') != -1:
-            self.dimention      = 384
-        elif backbone_name.find('base') != -1:
-            self.dimention      = 768
-        elif backbone_name.find('large') != -1:
-            self.dimention      = 1024
-            
+        self.dimention      = self.backbone.embed_dim
+
         self.prompt         = Prompt(pool_size, selection_size, prompt_len, self.dimention, device)
         self.simmilairty    = 0.0
         self.avgpool        = nn.AdaptiveAvgPool2d((1, self.dimention))

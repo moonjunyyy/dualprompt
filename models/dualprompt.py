@@ -40,22 +40,22 @@ class DualPrompt(L2P):
             if len(pos_g_prompt) == 0:    
                 self.g_prompt = None
             else:
-                self.g_prompt = Prompt(1,        1, len(pos_g_prompt) * len_g_prompt, dimention, device=device)
+                self.g_prompt = Prompt(1,        1, len(pos_g_prompt) * len_g_prompt, self.dimention, device=device)
             if len(pos_e_prompt) == 0:    
                 self.e_prompt = None
             else:
-                self.e_prompt = Prompt(task_num, 1, len(pos_e_prompt) * len_e_prompt, dimention, device=device)
+                self.e_prompt = Prompt(task_num, 1, len(pos_e_prompt) * len_e_prompt, self.dimention, device=device)
 
         elif prompt_func == 'prefix_tuning':
             self.prompt_func = self.prefix_tuning
             if len(pos_g_prompt) == 0:    
                 self.g_prompt = None
             else:
-                self.g_prompt = Prompt(1,        1, len(pos_g_prompt) * 2 * len_g_prompt, dimention, device=device)
+                self.g_prompt = Prompt(1,        1, len(pos_g_prompt) * 2 * len_g_prompt, self.dimention, device=device)
             if len(pos_e_prompt) == 0:    
                 self.e_prompt = None
             else:
-                self.e_prompt = Prompt(task_num, 1, len(pos_e_prompt) * 2 * len_e_prompt, dimention, device=device)
+                self.e_prompt = Prompt(task_num, 1, len(pos_e_prompt) * 2 * len_e_prompt, self.dimention, device=device)
         else: raise ValueError('Unknown prompt_func: {}'.format(prompt_func))
 
         self.task_num = task_num
