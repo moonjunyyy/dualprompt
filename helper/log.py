@@ -41,7 +41,7 @@ class Log():
                 with open(file_path, 'a') as f:
                     f.write(msg + '\n')
         if Log.store_str:
-            Log.store_str += msg + '\n'
+            Log._Log += msg + '\n'
         pass
 
     @staticmethod

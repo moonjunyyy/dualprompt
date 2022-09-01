@@ -15,12 +15,10 @@ class DualPrompt(L2P):
                  task_num       : int   = 10,
                  class_num      : int   = 100,
                  backbone_name  : str   = None,
-                 device         : torch.device = torch.device('cpu'),
                  **kwargs):
         super(DualPrompt, self).__init__(dimention= dimention,
                                          class_num= class_num,
-                                         backbone_name= backbone_name,
-                                         device= device, **kwargs)
+                                         backbone_name= backbone_name, **kwargs)
                                          
         del(self.prompt)
         del(self.avgpool) 
@@ -40,29 +38,28 @@ class DualPrompt(L2P):
             if len(pos_g_prompt) == 0:    
                 self.g_prompt = None
             else:
-                self.g_prompt = Prompt(1,        1, len(pos_g_prompt) * len_g_prompt, self.dimention, device=device)
+                self.g_prompt = Prompt(1,        1, len(pos_g_prompt) * len_g_prompt, self.dimention)
             if len(pos_e_prompt) == 0:    
                 self.e_prompt = None
             else:
-                self.e_prompt = Prompt(task_num, 1, len(pos_e_prompt) * len_e_prompt, self.dimention, device=device)
+                self.e_prompt = Prompt(task_num, 1, len(pos_e_prompt) * len_e_prompt, self.dimention)
 
         elif prompt_func == 'prefix_tuning':
             self.prompt_func = self.prefix_tuning
             if len(pos_g_prompt) == 0:    
                 self.g_prompt = None
             else:
-                self.g_prompt = Prompt(1,        1, len(pos_g_prompt) * 2 * len_g_prompt, self.dimention, device=device)
+                self.g_prompt = Prompt(1,        1, len(pos_g_prompt) * 2 * len_g_prompt, self.dimention)
             if len(pos_e_prompt) == 0:    
                 self.e_prompt = None
             else:
-                self.e_prompt = Prompt(task_num, 1, len(pos_e_prompt) * 2 * len_e_prompt, self.dimention, device=device)
+                self.e_prompt = Prompt(task_num, 1, len(pos_e_prompt) * 2 * len_e_prompt, self.dimention)
         else: raise ValueError('Unknown prompt_func: {}'.format(prompt_func))
 
         self.task_num = task_num
         self.task_id  = 0
 
     def forward(self, inputs : torch.Tensor, **kwargs):
-
         x = self.backbone.patch_embed(inputs)
         cls_token = self.backbone.cls_token.expand(x.shape[0], -1, -1)
         x = torch.cat((cls_token, x), dim=1)
@@ -94,7 +91,7 @@ class DualPrompt(L2P):
             
         x = self.prompt_func(x, g_prompt, e_prompt)
         
-        x = x[:, 0, :].clone()
+        x = self.backbone.norm(x)[:, 0, :].clone()
         x = self.classifier(x)
 
         if self.training:
@@ -113,10 +110,10 @@ class DualPrompt(L2P):
                 x = torch.cat((x, e_prompt[:, idx, :, :].clone()), dim = 1)
             x = block(x)
         return x
-
+    
     def prefix_tuning(self, x : torch.Tensor, g_prompt : torch.Tensor, e_prompt : torch.Tensor, **kwargs):
-
         for n, block in enumerate(self.backbone.blocks):
+            block = block.to(x.device)
             r  = x
             x  = block.norm1(x)
             xk = x
@@ -157,10 +154,9 @@ class DualPrompt(L2P):
         return F.cross_entropy(output, target) - 1 * self.simmilairty
 
     def to(self, device, **kwargs):
-        super().to(device, **kwargs)
         self.backbone = self.backbone.to(device)
+        self.past_class = self.past_class.to(device)
         self.classifier = self.classifier.to(device)
-        self.prompt_func.to(device)
         if self.g_prompt is not None:
             self.g_prompt = self.g_prompt.to(device)
         if self.e_prompt is not None:

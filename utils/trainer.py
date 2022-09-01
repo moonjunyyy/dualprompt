@@ -91,7 +91,6 @@ class trainer():
 
         self.multiprocessing_distributed = multiprocessing_distributed
         self.training = True
-        self.scaler = torch.cuda.amp.GradScaler(enabled=self.use_amp)
 
         if seed is not None:
             random.seed(seed)
@@ -251,6 +250,7 @@ class trainer():
                 criterion = model.loss_fn
             model = torch.nn.DataParallel(model).cuda()
         
+        self.scaler = torch.cuda.amp.GradScaler(enabled=self.use_amp)
         if self.criterion_fn != "custom":
             criterion = self.criterion_fn()
         optimizer = self.optimizer_fn(model.parameters(), **self.optimizer_args)
@@ -300,10 +300,7 @@ class trainer():
                     Log.log('==> test for Task {} :'.format(test))
                     acc1 = self.validate(self.test_loader, model, criterion)
                 scheduler.step()
-
-        #setting up the distributed environment
-        self.writer = SummaryWriter(self.save_path)
-
+        print(Log._Log)
         return
 
     def train(self, train_loader, model, criterion, optimizer, epoch):
@@ -345,6 +342,7 @@ class trainer():
             optimizer.zero_grad()
             self.scaler.scale(loss).backward()
             self.scaler.step(optimizer)
+            self.scaler.update()
 
             # measure elapsed time
             batch_time.update(time.time() - end)

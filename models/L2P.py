@@ -13,7 +13,6 @@ class L2P(nn.Module):
                  prompt_len     : int   = 5,
                  class_num      : int   = 100,
                  backbone_name  : str   = None,
-                 device         : torch.device = torch.device('cpu'),
                  **kwargs):
 
         super(L2P, self).__init__()
@@ -31,18 +30,18 @@ class L2P(nn.Module):
 
         self.dimention      = self.backbone.embed_dim
 
-        self.prompt         = Prompt(pool_size, selection_size, prompt_len, self.dimention, device)
+        self.prompt         = Prompt(pool_size, selection_size, prompt_len, self.dimention)
         self.simmilairty    = 0.0
         self.avgpool        = nn.AdaptiveAvgPool2d((1, self.dimention))
 
-        self.past_class     = torch.zeros(class_num, device = device)
+        self.past_class     = torch.zeros(class_num)
 
-        self.classifier        = nn.Linear     (self.dimention, class_num,   device = device)
+        self.classifier        = nn.Linear     (self.dimention, class_num)
         self.classifier.weight = nn.init.zeros_(self.classifier.weight)
         self.classifier.bias   = nn.init.zeros_(self.classifier.bias)
 
     def forward(self, inputs : torch.Tensor, **kwargs):
-        inputs = inputs.to(self.device)
+        
         x = self.backbone.patch_embed(inputs)
         cls_token = self.backbone.cls_token.expand(x.shape[0], -1, -1)
         x = torch.cat((cls_token, x), dim=1)
