@@ -11,14 +11,17 @@ from helper.log import Log
 from helper.argvs import log_parser, parse_args
 from utils.trainer import trainer
 
-def main(**kwargs):
-    _log_op = vars(log_parser.parse_known_args(kwargs)[0])
-    Log.log_init(**_log_op)
-    train = trainer(**kwargs)
+def main(args):
+    print(args)
+    _log_op, _ = log_parser.parse_known_args(sys.argv)
+    print(_log_op)
+    Log.log_init(_log_op)
+    train = trainer(args)
     train.run()
     print(Log._Log)
     time.sleep(60)
 
 if __name__ == "__main__":
-    main(**parse_args(sys.argv))
+    print(sys.argv)
+    main(parse_args(sys.argv))
     print("Done")

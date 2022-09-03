@@ -19,12 +19,11 @@ class DualPrompt(L2P):
         super(DualPrompt, self).__init__(dimention= dimention,
                                          class_num= class_num,
                                          backbone_name= backbone_name, **kwargs)
-                                         
         del(self.prompt)
         del(self.avgpool) 
         del(self.selection_size)
         del(self.prompt_len)
-
+        
         if len(pos_e_prompt) == 0 and len(pos_g_prompt) == 0:
             raise ValueError('one of the pos_g_prompt or pos_e_prompt must be specified')
 
@@ -162,3 +161,7 @@ class DualPrompt(L2P):
         if self.e_prompt is not None:
             self.e_prompt = self.e_prompt.to(device)
         return self
+
+    def _convert_train_task(self, task : torch.Tensor, **kwargs):
+        self.task_id += 1
+        return super()._convert_train_task(task, **kwargs)

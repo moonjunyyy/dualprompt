@@ -3,12 +3,10 @@ import time
 class Log():
     use_console = False
     use_files   = False
-    file_path   = []
-    store_str   = False
-    
-    _Log = ""
-
     show_time   = True
+    store_str   = False
+    file_path   = []
+    _Log = ""
 
     ERROR_HEADER     = '\033[91m[ERROR]\033[0m '
     WARNING_HEADER   = '\033[93m[WARNING]\033[0m '
@@ -16,18 +14,18 @@ class Log():
     DEBUG_HEADER     = '[Debug] '
     EXCEPTION_HEADER = '\033[92m[Exception]\033[0m '
 
-    def __init__(seLf, **kwargs):
+    def __init__(self, **kwargs):
         pass
     
     @staticmethod
-    def log_init(console = False, file = None, str = False):
-        Log.use_console = console
-        Log.use_files   = file is not None
-        Log.file_path   = file
-        Log.store_str   = str
+    def log_init(args):
+        Log.use_console = args.console
+        Log.use_files   = args.file is not None
+        Log.file_path   = args.file
+        Log.store_str   = args.string
         if Log.use_files:
-            for file_path in Log.file_path:
-                with open(file_path, 'w') as file:
+            for path in Log.file_path:
+                with open(path, 'w') as file:
                     pass
 
     @staticmethod
