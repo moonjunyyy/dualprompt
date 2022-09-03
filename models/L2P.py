@@ -66,33 +66,15 @@ class L2P(nn.Module):
             x = x + self.past_class.to(x.device)
         self.simmilairty = _simmilarity.sum() / x.size()[0]
         return x
-    
-    def metrics(self, output, target, **kwargs):
-        return {'loss'       : self.loss_fn(output, target),
-                'accuracy'   : self.accuracy(output, target) * 100,
-                'simmilarity': self.simmilairty}
 
     def loss_fn(self, output, target, **kwargs):
         return F.cross_entropy(output, target) - 0.5 * self.simmilairty
 
-    def accuracy(self, output, target, **kwargs):
-        return (output.argmax(dim = 1) == target).sum()/ output.size()[0]
-
-    def get_task(self, task : torch.Tensor, **kwargs):
+    def _convert_train_task(self, task : torch.Tensor, **kwargs):
         task = task.to(self.past_class.device)
         self.past_class += -torch.inf
         self.past_class[task] = 0
         return self.past_class
-
-    def train(self: T, mode: bool = True, **kwargs) -> T:
-        ten = super().train(mode)
-        self.backbone.eval()
-        return ten
-
-    def freeze_classifier(self, mask : torch.Tensor, **kwargs):
-        for param in self.classifier.parameters():
-            param.requires_grad = False
-        return self
 
     def to(self, device : torch.device, **kwargs):
         super().to(device, **kwargs)
@@ -102,3 +84,9 @@ class L2P(nn.Module):
         self.past_class = self.past_class.to(device)
         self.classifier = self.classifier.to(device)
         return self
+        
+    def train(self: T, mode: bool = True, **kwargs) -> T:
+        ten = super().train(mode)
+        self.backbone.eval()
+        return ten
+        
