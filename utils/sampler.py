@@ -92,8 +92,9 @@ class CILSampler(torch.utils.data.Sampler):
         self.task = 0
         self.seed = seed
 
-        self.prepare()
         self.set_epoch(0)
+        self.prepare()
+        self.set_task(0)
         
     def __iter__(self):
         self.prepare()
