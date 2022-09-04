@@ -163,7 +163,7 @@ def worker(gpu, ngpus_per_node, args):
     args.model_without_ddp = args.model
     args.model.cuda(args.gpu)
     if args.distributed:
-        args.model = torch.nn.parallel.DistributedDataParallel(args.model, device_ids=[args.gpu])
+        args.model = torch.nn.parallel.DistributedDataParallel(args.model, device_ids=[args.gpu], output_device = 0)
         args.model._set_static_graph()
     args.optimizer = args.optimizer(args.model.parameters(), **args.optimizer_args)
     args.criterion = args.model_without_ddp.loss_fn if args.criterion == "custom" else args.criterion()
@@ -273,8 +273,8 @@ def validate(args):
                 batch_time.update(time.time() - end)
                 end = time.time()
 
-                if i % args.log_interval == args.log_interval - 1 or i == len(loader) - 1:
-                    progress.display(i + 1)
+              #  if i % args.log_interval == args.log_interval - 1 or i == len(loader) - 1:
+             #       progress.display(i + 1)
 
     batch_time = AverageMeter('Time', ':6.3f', Summary.NONE)
     losses = AverageMeter('Loss', ':.4e', Summary.NONE)
