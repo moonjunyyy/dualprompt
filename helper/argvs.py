@@ -106,15 +106,16 @@ parser.add_argument("--step_size"     , type=int, help="number of batches for ac
 parser.add_argument("--epochs"       , type=int, help="iteration of dataset for training")
 parser.add_argument("--log_freqency" , type=int, help="number of print for a epoch")
 
-parser.add_argument("--num_tasks"    , type=int, default=1,help="task numbers")
-parser.add_argument("--task_governor", type=str, default=None, help="setting of continual learning for multiple task")
+parser.add_argument("--num_tasks"     , type=int, default=1,help="task numbers")
+parser.add_argument("--task_governor" , type=str, default=None, help="setting of continual learning for multiple task")
 
 parser.add_argument("--dataset"       , type=str, help="number of print for a epoch")
-parser.add_argument("--num_workers"       , type=int, default=2, help="number of workers for data loader")
+parser.add_argument("--num_workers"   , type=int, default=2, help="number of workers for data loader")
+parser.add_argument("--num_nodes"     , type=int, default=1, help="total number of nodes to use")
 
 parser.add_argument("--dataset_path" , type=str, default="/home/datasets/", help="path of dataset")
 parser.add_argument("--save_path"    , type=str, default="saved/model/", help="path to save model")
-parser.add_argument("--no_batchwise" , default=False, action="store_const", const = True, help="no batchwise selection for")
+parser.add_argument("--batchwise"    , default=False, action= argparse.BooleanOptionalAction, help="no batchwise selection for")
 
 parser.add_argument("--dist_url"      , type=str, default="env://", help="distributed training url")
 parser.add_argument("--dist_backend"  , type=str, default="nccl", help="distributed training backend")

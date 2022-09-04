@@ -59,6 +59,7 @@ class DualPrompt(L2P):
         self.task_id  = 0
 
     def forward(self, inputs : torch.Tensor, **kwargs):
+        self.to(inputs.device)
         x = self.backbone.patch_embed(inputs)
         cls_token = self.backbone.cls_token.expand(x.shape[0], -1, -1)
         x = torch.cat((cls_token, x), dim=1)
@@ -68,7 +69,7 @@ class DualPrompt(L2P):
         q = self.backbone.norm(q)[:, 0, :].clone()
     
         if self.g_prompt is not None:
-            g_prompt = self.g_prompt.prompt.clone()
+            _, g_prompt = self.g_prompt(q)
             g_prompt = g_prompt.squeeze().reshape(-1, self.len_g_prompt, self.dimention)
             g_prompt = g_prompt.unsqueeze(0).repeat(x.size(0), 1, 1, 1)
         else:
@@ -94,7 +95,7 @@ class DualPrompt(L2P):
         x = self.classifier(x)
 
         if self.training:
-            x = x + self.past_class.to(x.device)
+            x = x + self.past_class
 
         self.simmilairty = _simmilarity.sum() / x.size()[0]
         return x
@@ -112,7 +113,6 @@ class DualPrompt(L2P):
     
     def prefix_tuning(self, x : torch.Tensor, g_prompt : torch.Tensor, e_prompt : torch.Tensor, **kwargs):
         for n, block in enumerate(self.backbone.blocks):
-            block = block.to(x.device)
             r  = x
             x  = block.norm1(x)
             xk = x
@@ -153,13 +153,14 @@ class DualPrompt(L2P):
         return F.cross_entropy(output, target) - 1 * self.simmilairty
 
     def to(self, device, **kwargs):
-        self.backbone = self.backbone.to(device)
+        for param in self.backbone.parameters():
+            param.to(device)
         self.past_class = self.past_class.to(device)
-        self.classifier = self.classifier.to(device)
+        self.classifier.to(device)
         if self.g_prompt is not None:
-            self.g_prompt = self.g_prompt.to(device)
+            self.g_prompt.to(device)
         if self.e_prompt is not None:
-            self.e_prompt = self.e_prompt.to(device)
+            self.e_prompt.to(device)
         return self
 
     def _convert_train_task(self, task : torch.Tensor, **kwargs):

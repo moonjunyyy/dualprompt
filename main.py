@@ -9,15 +9,18 @@ import torch.multiprocessing as mp
 from models.L2P import L2P
 from helper.log import Log
 from helper.argvs import log_parser, parse_args
-from utils.trainer import trainer
+from utils.trainer import image_trainer
+
+os.environ["TORCH_DISTRIBUTED_DEBUG"]="DETAIL"
 
 def main(args):
     print(args)
     _log_op, _ = log_parser.parse_known_args(sys.argv)
     print(_log_op)
     Log.log_init(_log_op)
-    train = trainer(args)
-    train.run()
+
+    image_trainer(args)
+    
     print(Log._Log)
     time.sleep(60)
 

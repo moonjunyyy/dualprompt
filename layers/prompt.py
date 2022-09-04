@@ -21,10 +21,10 @@ class Prompt(nn.Module):
         self.counter        = torch.zeros(pool_size)
 
     def forward(self, query : torch.Tensor, *args, **kwargs):
-
+        self.to(query.device)
         match = F.cosine_similarity(query.unsqueeze(1), self.key, dim = -1)
         if self.training:
-            topk    = (match * F.normalize(1 / self.frequency, p=1, dim=-1))
+            topk    = match * F.normalize(1 / self.frequency, p=1, dim=-1)
         else :
             topk    = match
         _, topk     = topk.topk(self.selection_size, dim = -1, largest = True, sorted = True)
@@ -45,6 +45,6 @@ class Prompt(nn.Module):
     def to(self, device, **kwargs):
         self.frequency = self.frequency.to(device)
         self.counter   = self.counter.to  (device)
-        self.key       = nn.Parameter(self.key.to      (device))
-        self.prompt    = nn.Parameter(self.prompt.to   (device))
+        self.key.to      (device)
+        self.prompt.to   (device)
         return self

@@ -41,7 +41,7 @@ class L2P(nn.Module):
         self.classifier.bias   = nn.init.zeros_(self.classifier.bias)
 
     def forward(self, inputs : torch.Tensor, **kwargs):
-        
+        self.to(inputs.device)
         x = self.backbone.patch_embed(inputs)
         cls_token = self.backbone.cls_token.expand(x.shape[0], -1, -1)
         x = torch.cat((cls_token, x), dim=1)
@@ -77,8 +77,8 @@ class L2P(nn.Module):
         return self.past_class
 
     def to(self, device : torch.device, **kwargs):
-        super().to(device, **kwargs)
-        self.backbone = self.backbone.to(device)
+        for param in self.backbone.parameters():
+            param.to(device)
         self.prompt = self.prompt.to(device)
         self.avgpool = self.avgpool.to(device)
         self.past_class = self.past_class.to(device)

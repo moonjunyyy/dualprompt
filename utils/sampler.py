@@ -100,9 +100,8 @@ class CILSampler(torch.utils.data.Sampler):
         self.prepare()
         if self.distributed:
             # subsample
-            indices = self.indices[self.task][self.rank:self.total_size:self.num_replicas]
+            indices = self.indices[self.task][self.rank:self.total_size:self.num_replicas].repeat(self.num_repeats)
             assert len(indices) == self.num_samples
-
             return iter(indices[:self.num_selected_samples])
         else:
             indices = self.indices[self.task]
@@ -139,11 +138,11 @@ class CILSampler(torch.utils.data.Sampler):
 
         self.task = task
         if self.distributed:
-            self.num_samples = int(math.ceil(len(self.indices[self.task]) * self.num_repeats / self.num_replicas))
+            self.num_samples = int(len(self.indices[self.task]) * self.num_repeats / self.num_replicas)
             self.total_size = self.num_samples * self.num_replicas
             self.num_selected_samples = int(len(self.indices[self.task].tolist()) // self.num_replicas)
         else:
-            self.num_samples = int(math.ceil(len(self.indices[self.task]) * self.num_repeats))
+            self.num_samples = int(len(self.indices[self.task]) * self.num_repeats)
             self.total_size = self.num_samples
             self.num_selected_samples = int(len(self.indices[self.task].tolist()))
     
