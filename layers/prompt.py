@@ -3,13 +3,14 @@ import torch.nn as nn
 import torch.nn.functional as F
 
 class Prompt(nn.Module):
-    def __init__(self, pool_size : int, selection_size : int, prompt_len : int, dimention : int, **kwargs):
+    def __init__(self, pool_size : int, selection_size : int, prompt_len : int, dimention : int, batchwise_selection : bool = True, **kwargs):
         super(Prompt, self).__init__()
 
         self.pool_size      = pool_size
         self.selection_size = selection_size
         self.prompt_len     = prompt_len
         self.dimention      = dimention
+        self.batchwise_selection = batchwise_selection
 
         self.key            = nn.Parameter(torch.randn(pool_size,             dimention, requires_grad=True))
         self.prompt         = nn.Parameter(torch.randn(pool_size, prompt_len, dimention, requires_grad=True))
@@ -28,14 +29,15 @@ class Prompt(nn.Module):
         else :
             topk    = match
         _, topk     = topk.topk(self.selection_size, dim = -1, largest = True, sorted = True)
-        idx, counts = topk.unique(sorted=True, return_counts=True)
-        _, mosts    = counts.topk(self.selection_size, largest = True, sorted = True)
-        topk        = idx[mosts]
 
+        if self.batchwise_selection:
+            idx, counts = topk.unique(sorted=True, return_counts=True)
+            _, mosts    = counts.topk(self.selection_size, largest = True, sorted = True)
+            topk        = idx[mosts].unsqueeze(0).repeat(query.size()[0], 1)
         if self.training:
-            self.counter += topk.bincount(minlength = self.pool_size)
+            self.counter += topk.view(-1).bincount(minlength = self.pool_size)
 
-        return match.gather(-1, topk.unsqueeze(0)), self.prompt[topk].unsqueeze(0).expand(query.size(0),-1,-1,-1)
+        return match[topk], self.prompt[topk]
 
     def update(self):
         self.frequency += self.counter

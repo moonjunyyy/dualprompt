@@ -1,14 +1,12 @@
 import argparse
-import sys
 
 import torch
 import torch.nn as nn
-from torch.utils.data import DataLoader, Dataset, Subset
+from torch.utils.data import Dataset
 from torchvision.datasets import CIFAR10, CIFAR100, MNIST, FashionMNIST
 
 from models.dualprompt import DualPrompt
 from models.L2P import L2P
-from helper.log import Log
 
 #Functions to parse arguments
 
@@ -76,18 +74,13 @@ def parse_args(args : list):
     parse.model, parse.model_args = model_parser(parse.model, args)
 
     if parse.criterion == "custom":
-        Log.log_warning("Using custom criterion, please specify the loss_fn in the model")
+        print("Using custom criterion, please specify the loss_fn in the model")
     else: parse.criterion = criterion_parser(parse.criterion)
 
     parse.optimizer, parse.optimizer_args = optimizer_parser(parse.optimizer, args)
     parse.scheduler, parse.scheduler_args = scheduler_parser(parse.scheduler, args)
     parse.dataset = dataset(parse, parse.dataset)
     return parse
-
-def parse_log_settings(args : list):
-    parse, _ = log_parser.parse_known_args(args)
-    return parse
-
 
 ############################################################################
 #                                                                          #
@@ -115,7 +108,6 @@ parser.add_argument("--num_nodes"     , type=int, default=1, help="total number 
 
 parser.add_argument("--dataset_path" , type=str, default="/home/datasets/", help="path of dataset")
 parser.add_argument("--save_path"    , type=str, default="saved/model/", help="path to save model")
-parser.add_argument("--batchwise"    , default=False, action= argparse.BooleanOptionalAction, help="no batchwise selection for")
 
 parser.add_argument("--dist_url"      , type=str, default="env://", help="distributed training url")
 parser.add_argument("--dist_backend"  , type=str, default="nccl", help="distributed training backend")
@@ -125,11 +117,6 @@ parser.add_argument("--device"  , type=str, default='cuda', help="device to use 
 parser.add_argument("--pin_mem" , default=False, action= argparse.BooleanOptionalAction, help="use pin memory for data loader")
 parser.add_argument("--use_amp" , default=False, action= argparse.BooleanOptionalAction, help="use amp for fp16")
 parser.add_argument("--debug"   , default=False, action= argparse.BooleanOptionalAction, help="in debug mode, program will shows more information")
-
-log_parser = argparse.ArgumentParser(description = 'Logging Options')
-log_parser.add_argument("--file"    , type=str, default=None, nargs='+', help="log print into file with name")
-log_parser.add_argument("--console" , default=False, action= argparse.BooleanOptionalAction, help="log print into console")
-log_parser.add_argument("--string"  , default=False, action= argparse.BooleanOptionalAction, help="log print into string")
 
 ############################################################################
 #  Model Parser for Each Model                                             #
@@ -150,7 +137,7 @@ l2p.add_argument("--backbone_name" , type=str)
 l2p.add_argument("--pool_size"     , type=int, default=10)
 l2p.add_argument("--selection_size", type=int, default=5)
 l2p.add_argument("--prompt_len"    , type=int, default=5)
-
+l2p.add_argument("--batchwise_selection" , default=False, action= argparse.BooleanOptionalAction, help="no batchwise selection for")
 ############################################################################
 #  Optimizer Parser for Each                                               #
 ############################################################################ 
