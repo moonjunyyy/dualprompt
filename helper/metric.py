@@ -2,6 +2,7 @@ from enum import Enum
 
 import torch
 import torch.distributed as dist
+from torch.utils.tensorboard import SummaryWriter
 
 class Summary(Enum):
     NONE = 0
@@ -11,67 +12,78 @@ class Summary(Enum):
 
 class AverageMeter(object):
     """Computes and stores the average and current value"""
-    def __init__(args, name, fmt=':f', summary_type=Summary.AVERAGE):
-        args.name = name
-        args.fmt = fmt
-        args.summary_type = summary_type
-        args.reset()
+    def __init__(self, name, fmt=':f', summary_type=Summary.AVERAGE):
+        self.name = name
+        self.fmt = fmt
+        self.summary_type = summary_type
+        self.reset()
 
-    def reset(args):
-        args.val = 0
-        args.avg = 0
-        args.sum = 0
-        args.count = 0
+    def reset(self):
+        self.val = 0
+        self.avg = 0
+        self.sum = 0
+        self.count = 0
 
-    def update(args, val, n=1):
-        args.val = val
-        args.sum += val * n
-        args.count += n
-        args.avg = args.sum / args.count
+    def update(self, val, n=1):
+        self.val = val
+        self.sum += val * n
+        self.count += n
+        self.avg = self.sum / self.count
 
-    def all_reduce(args):
+    def all_reduce(self):
         device = "cuda" if torch.cuda.is_available() else "cpu"
-        total = torch.tensor([args.sum, args.count], dtype=torch.float32, device=device)
+        total = torch.tensor([self.sum, self.count], dtype=torch.float32, device=device)
         dist.all_reduce(total, dist.ReduceOp.SUM, async_op=False)
-        args.sum, args.count = total.tolist()
-        args.avg = args.sum / args.count
+        self.sum, self.count = total.tolist()
+        self.avg = self.sum / self.count
 
-    def __str__(args):
-        fmtstr = '{name} {val' + args.fmt + '} ({avg' + args.fmt + '})'
-        return fmtstr.format(**args.__dict__)
+    def __str__(self):
+        fmtstr = '{name} {val' + self.fmt + '} ({avg' + self.fmt + '})'
+        return fmtstr.format(**self.__dict__)
     
-    def summary(args):
+    def summary(self):
         fmtstr = ''
-        if args.summary_type is Summary.NONE:
+        if self.summary_type is Summary.NONE:
             fmtstr = ''
-        elif args.summary_type is Summary.AVERAGE:
+        elif self.summary_type is Summary.AVERAGE:
             fmtstr = '{name} {avg:.3f}'
-        elif args.summary_type is Summary.SUM:
+        elif self.summary_type is Summary.SUM:
             fmtstr = '{name} {sum:.3f}'
-        elif args.summary_type is Summary.COUNT:
+        elif self.summary_type is Summary.COUNT:
             fmtstr = '{name} {count:.3f}'
         else:
-            raise ValueError('invalid summary type %r' % args.summary_type)
+            raise ValueError('invalid summary type %r' % self.summary_type)
         
-        return fmtstr.format(**args.__dict__)
+        return fmtstr.format(**self.__dict__)
 
 class ProgressMeter(object):
-    def __init__(args, num_batches, meters, prefix=""):
-        args.batch_fmtstr = args._get_batch_fmtstr(num_batches)
-        args.meters = meters
-        args.prefix = prefix
+    def __init__(self, num_batches, meters, prefix=""):
+        self.batch_fmtstr = self._get_batch_fmtstr(num_batches)
+        self.num_batches = num_batches
+        self.meters = meters
+        self.prefix = prefix
 
-    def display(args, batch):
-        entries = [args.prefix + args.batch_fmtstr.format(batch)]
-        entries += [str(meter) for meter in args.meters]
+    def display(self, batch):
+        entries = [self.prefix + self.batch_fmtstr.format(batch)]
+        entries += [str(meter) for meter in self.meters]
         print('\t'.join(entries))
         
-    def display_summary(args):
+    def display_summary(self):
         entries = [" *"]
-        entries += [meter.summary() for meter in args.meters]
+        entries += [meter.summary() for meter in self.meters]
         print(' '.join(entries))
 
-    def _get_batch_fmtstr(args, num_batches):
+    def write(self, args, epoch, batch):
+        with SummaryWriter(args.save_path) as writer:
+            for meter in self.meters:
+               writer.add_scalar(meter.name, meter.val, epoch * self.num_batches + batch)
+
+    def write_summary(self, args, epoch):
+        with SummaryWriter(args.save_path) as writer:
+            for meter in self.meters:
+               writer.add_scalar("Epoch/"+meter.name, meter.val, epoch)
+
+    def _get_batch_fmtstr(self, num_batches):
         num_digits = len(str(num_batches // 1))
         fmt = '{:' + str(num_digits) + 'd}'
         return '[' + fmt + '/' + fmt.format(num_batches) + ']'

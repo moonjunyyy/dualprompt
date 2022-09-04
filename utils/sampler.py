@@ -122,7 +122,6 @@ class CILSampler(torch.utils.data.Sampler):
                 idx = torch.randperm(len(self.dataset))
             else:
                 idx = torch.arange(len(self.dataset))
-            idx = torch.arange(len(self.dataset))
             sel = (torch.tensor(self.dataset.targets) == self.taskids[i].unsqueeze(-1)).nonzero()[:,1]
             sel = idx[sel]
             self.indices.append(sel)

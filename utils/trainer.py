@@ -56,9 +56,9 @@ def _load(args, load_idx = -1):
     print("Loaded model from epoch {}".format(epoch))
     return args
 
-def save_on_master(self, *args, **kwargs):
-    if self.is_main_process():
-        torch.save(*args, **kwargs)
+def save_on_master(args):
+    if is_main_process():
+        _save(args)
 
 def is_dist_avail_and_initialized():
     if not dist.is_available():
@@ -93,22 +93,62 @@ def setup_for_distributed(is_master):
             builtin_print(*args, **kwargs)
     __builtin__.print = print
 
+def set_task_train(args, task_id):
+    try:
+        args.data_loader_train = torch.utils.data.DataLoader(
+            args.dataset_train, sampler=args.sampler_train,
+            batch_size=args.batch_size,
+            num_workers=args.num_workers,
+            pin_memory=args.pin_mem,
+            drop_last=True,
+        )
+    except Exception as e:
+        raise e
+def set_task_val(args, task_id):
+    try:        
+        args.sampler_val.set_task(task_id)
+        args.data_loader_val = torch.utils.data.DataLoader(
+            args.dataset_val, sampler=args.sampler_val,
+            batch_size=int(1.5 * args.batch_size),
+            num_workers=args.num_workers,
+            pin_memory=args.pin_mem,
+            drop_last=False
+        )    
+    except Exception as e:
+        raise e
+
 def worker(gpu, ngpus_per_node, args):
 
     os.environ['MASTER_ADDR'] = '127.0.0.1'
     os.environ['MASTER_PORT'] = '29500'
 
-    args.rank = gpu
-    args.gpu = args.rank % ngpus_per_node
+    # For multiprocessing distributed training, get the rank of the processs
+    if args.distributed:
+        args.rank = gpu 
+        args.gpu  = args.rank % ngpus_per_node
+    else :
+        args.rank = None
+        args.gpu  = 0
+    # os.environ['RANK']
+    # os.environ['WORLD_SIZE']
+    # os.environ['LOCAL_RANK']
+    # os.environ['SLURM_PROCID']
 
     if gpu is not None:
         print('Using GPU:{} for training.'.format(args.gpu))
 
-    args.dist_backend = 'nccl'
-    print('| distributed init (rank {}): {}'.format(args.rank, args.gpu))
-    dist.init_process_group(backend=args.dist_backend, init_method=args.dist_url,
-                            rank=args.rank, world_size = args.world_size)
-    
+    if args.distributed:
+        args.dist_backend = 'nccl'
+        print('| distributed init (rank {}): {}'.format(args.rank, args.gpu))
+        dist.init_process_group(backend=args.dist_backend, init_method=args.dist_url,
+                                rank=args.rank, world_size = args.world_size)
+
+        torch.cuda.set_device(args.gpu)
+        # Print is available only for the master process
+        setup_for_distributed(is_main_process())
+        dist.barrier()
+
+    # Set deterministic seed for reproducibility
     if args.seed is not None:
         seed = args.seed + get_rank()
         random.seed(seed)
@@ -121,37 +161,17 @@ def worker(gpu, ngpus_per_node, args):
               'from checkpoints.')
         cudnn.benchmark = True
 
-    torch.cuda.set_device(args.gpu)
-    setup_for_distributed(is_main_process())
-
     world_size  = get_world_size() if args.distributed else None
     global_rank = get_rank()       if args.distributed else None
 
     args.sampler_train = CILSampler(
-        args.dataset_train, num_tasks=args.num_tasks, num_replicas=args.world_size, rank=global_rank, seed=args.seed, shuffle=True)
+        args.dataset_train, num_tasks=args.num_tasks, num_replicas=world_size, rank=global_rank, seed=args.seed, shuffle=True)
     args.sampler_val   = CILSampler(
-        args.dataset_val,   num_tasks=args.num_tasks, num_replicas=args.world_size, rank=global_rank, seed=args.seed, shuffle=False)
-    if args.distributed:
-        if len(args.dataset_val) % args.world_size != 0:
-            print('Warning: Enabling distributed evaluation with an eval dataset not divisible by process number. '
-                  'This will slightly alter validation results as extra duplicate entries are added to achieve '
-                  'equal num of samples per-process.')
+        args.dataset_val,   num_tasks=args.num_tasks, num_replicas=world_size, rank=global_rank, seed=args.seed, shuffle=False)
     args.batch_size = int(args.batch_size / args.world_size)
 
-    args.data_loader_train = torch.utils.data.DataLoader(
-        args.dataset_train, sampler=args.sampler_train,
-        batch_size=args.batch_size,
-        num_workers=args.num_workers,
-        pin_memory=args.pin_mem,
-        drop_last=True,
-    )
-    args.data_loader_val   = torch.utils.data.DataLoader(
-        args.dataset_val, sampler=args.sampler_val,
-        batch_size=int(1.5 * args.batch_size),
-        num_workers=args.num_workers,
-        pin_memory=args.pin_mem,
-        drop_last=False
-    )
+    set_task_train(args, 0)
+    set_task_val(args, 0)
 
     print(f"Creating model...")
     args.model = args.model(**args.model_args)
@@ -166,29 +186,27 @@ def worker(gpu, ngpus_per_node, args):
     args.epoch = 1
     _load(args)
 
-    dist.barrier()
     if not args.training:
         args.log_interval = len(args.data_loader_val) // args.log_freqency
         validate(args)
         return
+
     for task in range(args.num_tasks):
         args.log_interval = len(args.data_loader_train) // args.log_freqency
-        args.sampler_train.set_task(task)
+
         print('')
         print('Train Task {} :'.format(task))
+        set_task_train(args, task)
         for epoch in range(args.epoch, args.epochs + 1):
             args.sampler_train.set_epoch(epoch)
             # train for one epoch
-            try :
-                args.model_without_ddp.set_task(args.dataset_train.get_task[task])
-            except Exception as e: pass
             train(args)
             print('')
             args.scheduler.step()
         # evaluate on validation set
         for test in range(task + 1):
             print('==> test for Task {} :'.format(test))
-            args.sampler_val.set_task(test)
+            set_task_val(args, test)
             acc1 = validate(args)
     return
 
@@ -210,11 +228,15 @@ def train(args):
     for i, (images, target) in enumerate(args.data_loader_train):
         # measure data loading timeorprint
         data_time.update(time.time() - end)
+        
+        if i % args.step_size == 0:
+            args.optimizer.zero_grad()
 
         if args.gpu is not None:
             images = images.cuda(args.gpu, non_blocking=True)
         if torch.cuda.is_available():
             target = target.cuda(args.gpu, non_blocking=True)
+            
         # compute output
         output = args.model(images)
         loss = args.criterion(output, target)
@@ -235,7 +257,7 @@ def train(args):
         batch_time.update(time.time() - end)
         end = time.time()
 
-        if  i % args.log_interval == 0 or i == len(args.data_loader_train) - 1:
+        if i % args.log_interval == args.log_interval - 1 or i == len(args.data_loader_train) - 1:
             progress.display(i + 1)
 
 def validate(args):
@@ -292,7 +314,6 @@ def validate(args):
             aux_val_dataset, batch_size=args.batch_size, shuffle=False,
             num_workers=args.num_workers, pin_memory=True)
         run_validate(aux_val_loader, len(args.data_loader_val))
-
     progress.display_summary()
 
     return top1.avg
@@ -300,6 +321,7 @@ def validate(args):
 def image_trainer(args):
     transform = transforms.Compose([transforms.Resize(224),
                                     transforms.ToTensor ()])
+
     args.dataset_train  = args.dataset(args.dataset_path, download=True, train=True,  transform=transform)
     args.dataset_val    = args.dataset(args.dataset_path, download=True, train=False, transform=transform)
     args.epoch          = 1
@@ -308,7 +330,13 @@ def image_trainer(args):
     args.log_interval   = 0
     args.training       = True
     args.world_size     = args.num_nodes * torch.cuda.device_count()
+    print("world_size: ", args.world_size)
     args.distributed    = args.world_size > 1
+    print("distributed: ", args.distributed)
+
+    args.step_size      = int(args.step_size // args.batch_size)
+    args.step_size      = args.step_size if args.step_size > 0 else 1
+
     if args.task_governor is not None:
         print('Task governor is not implemented yet. Ignore the keyword and works CIL setting.')
         args.task_governor = None

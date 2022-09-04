@@ -13,6 +13,7 @@ class L2P(nn.Module):
                  prompt_len     : int   = 5,
                  class_num      : int   = 100,
                  backbone_name  : str   = None,
+                 batchwise_selection : bool = False,
                  **kwargs):
 
         super(L2P, self).__init__()
@@ -30,7 +31,7 @@ class L2P(nn.Module):
 
         self.dimention      = self.backbone.embed_dim
 
-        self.prompt         = Prompt(pool_size, selection_size, prompt_len, self.dimention)
+        self.prompt         = Prompt(pool_size, selection_size, prompt_len, self.dimention, batchwise_selection)
         self.simmilairty    = 0.0
         self.avgpool        = nn.AdaptiveAvgPool2d((1, self.dimention))
 
@@ -54,7 +55,7 @@ class L2P(nn.Module):
 
         prompts = prompts.contiguous().view(x.size()[0], -1, self.dimention)
         prompts = prompts + self.backbone.pos_embed[:,0,:].expand(prompts.size()[0], prompts.size()[1], -1)
-        
+
         x = torch.concat([prompts, x], dim = 1)
         x = self.backbone.blocks(x)
         x = self.backbone.norm(x)
@@ -62,9 +63,9 @@ class L2P(nn.Module):
         x = x[:, :self.selection_size * self.prompt_len, :].clone()
         x = self.avgpool(x).squeeze()
         x = self.classifier(x)
+        
         if self.training:
-            x = x + self.past_class.to(x.device)
-        self.simmilairty = _simmilarity.sum() / x.size()[0]
+            x += + self.past_class.to(x.device)
         return x
 
     def loss_fn(self, output, target, **kwargs):
