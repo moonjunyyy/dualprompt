@@ -3,8 +3,6 @@ from enum import Enum
 import torch
 import torch.distributed as dist
 
-from helper.log import Log
-
 class Summary(Enum):
     NONE = 0
     AVERAGE = 1
@@ -66,12 +64,12 @@ class ProgressMeter(object):
     def display(args, batch):
         entries = [args.prefix + args.batch_fmtstr.format(batch)]
         entries += [str(meter) for meter in args.meters]
-        Log.log('\t'.join(entries))
+        print('\t'.join(entries))
         
     def display_summary(args):
         entries = [" *"]
         entries += [meter.summary() for meter in args.meters]
-        Log.log(' '.join(entries))
+        print(' '.join(entries))
 
     def _get_batch_fmtstr(args, num_batches):
         num_digits = len(str(num_batches // 1))

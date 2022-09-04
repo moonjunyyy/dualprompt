@@ -121,10 +121,10 @@ def worker(gpu, ngpus_per_node, args):
         torch.manual_seed(seed)
         cudnn.deterministic = True
         print('You have chosen to seed training. '
-                'This will turn on the CUDNN deterministic setting, '
-                'which can slow down your training considerably! '
-                'You may see unexpected behavior when restarting '
-                'from checkpoints.')
+              'This will turn on the CUDNN deterministic setting, '
+              'which can slow down your training considerably! '
+              'You may see unexpected behavior when restarting '
+              'from checkpoints.')
         cudnn.benchmark = True
 
     torch.cuda.set_device(args.gpu)
@@ -140,8 +140,8 @@ def worker(gpu, ngpus_per_node, args):
     if args.distributed:
         if len(args.dataset_val) % args.world_size != 0:
             print('Warning: Enabling distributed evaluation with an eval dataset not divisible by process number. '
-                    'This will slightly alter validation results as extra duplicate entries are added to achieve '
-                    'equal num of samples per-process.')
+                  'This will slightly alter validation results as extra duplicate entries are added to achieve '
+                  'equal num of samples per-process.')
 
     args.data_loader_train = torch.utils.data.DataLoader(
         args.dataset_train, sampler=args.sampler_train,
@@ -174,9 +174,11 @@ def worker(gpu, ngpus_per_node, args):
 
     dist.barrier()
     if not args.training:
+        args.log_interval = len(args.data_loader_val) // args.log_freqency
         validate(args)
         return
     for task in range(args.num_tasks):
+        args.log_interval = len(args.data_loader_train) // args.log_freqency
         args.sampler_train.set_task(task)
         print('')
         print('Train Task {} :'.format(task))
@@ -197,7 +199,6 @@ def worker(gpu, ngpus_per_node, args):
     return
 
 def train(args):
-    args.log_interval = len(args.data_loader_train) // args.log_freqency
     batch_time = AverageMeter('Time', ':6.3f')
     data_time  = AverageMeter('Data', ':6.3f')
     losses     = AverageMeter('Loss', ':.4e')
@@ -213,7 +214,7 @@ def train(args):
 
     end = time.time()
     for i, (images, target) in enumerate(args.data_loader_train):
-        # measure data loading time
+        # measure data loading timeorprint
         data_time.update(time.time() - end)
 
         if args.gpu is not None:
@@ -242,7 +243,7 @@ def train(args):
         batch_time.update(time.time() - end)
         end = time.time()
 
-        if  i % args.log_interval == args.log_interval - 1 or i == len(args.data_loader_train) - 1:
+        if  i % args.log_interval == 0 or i == len(args.data_loader_train) - 1:
             progress.display(i + 1)
 
 def validate(args):

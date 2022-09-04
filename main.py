@@ -15,13 +15,8 @@ os.environ["TORCH_DISTRIBUTED_DEBUG"]="DETAIL"
 
 def main(args):
     print(args)
-    _log_op, _ = log_parser.parse_known_args(sys.argv)
-    print(_log_op)
-    Log.log_init(_log_op)
 
     image_trainer(args)
-    
-    print(Log._Log)
     time.sleep(60)
 
 if __name__ == "__main__":

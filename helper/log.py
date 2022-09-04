@@ -1,6 +1,10 @@
 import time
+import threading
+import sys
 
 class Log():
+
+    lock = threading.Lock()
     use_console = False
     use_files   = False
     show_time   = True
@@ -8,11 +12,11 @@ class Log():
     file_path   = []
     _Log = ""
 
-    ERROR_HEADER     = '\033[91m[ERROR]\033[0m '
-    WARNING_HEADER   = '\033[93m[WARNING]\033[0m '
+    ERROR_HEADER     = '[ERROR]'
+    WARNING_HEADER   = '[WARNING]'
     INFO_HEADER      = '[Info] '
     DEBUG_HEADER     = '[Debug] '
-    EXCEPTION_HEADER = '\033[92m[Exception]\033[0m '
+    EXCEPTION_HEADER = '[Exception]'
 
     def __init__(self, **kwargs):
         pass
@@ -30,17 +34,19 @@ class Log():
 
     @staticmethod
     def log(msg):
+        Log.lock.acquire()
         if Log.show_time:
             msg = time.strftime("%H:%M:%S") + " " + msg
         if Log.use_console:
             print(msg)
+            sys.stdout.flush()
         if Log.use_files:
             for file_path in Log.file_path:
                 with open(file_path, 'a') as f:
                     f.write(msg + '\n')
         if Log.store_str:
             Log._Log += msg + '\n'
-        pass
+        Log.lock.release()
 
     @staticmethod
     def log_error(msg):
