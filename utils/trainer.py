@@ -201,15 +201,15 @@ def worker(gpu, ngpus_per_node, args):
         return
     for task in range(args.num_tasks):
         args.log_interval = len(args.data_loader_train) // args.log_freqency
-        set_task_train(args, task)
         print('')
         print('Train Task {} :'.format(task))
+        set_task_train(args, task)
+        try :
+            args.model_without_ddp.set_task(args.sampler_train.get_task[task])
+        except Exception as e: pass
         for epoch in range(args.epoch, args.epochs + 1):
             args.sampler_train.set_epoch(epoch)
             # train for one epoch
-            try :
-                args.model_without_ddp.set_task(args.dataset_train.get_task[task])
-            except Exception as e: pass
             train(args)
             print('')
             args.scheduler.step()
