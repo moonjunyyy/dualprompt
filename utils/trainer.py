@@ -163,7 +163,7 @@ def worker(gpu, ngpus_per_node, args):
     args.model_without_ddp = args.model
     args.model.cuda(args.gpu)
     if args.distributed:
-        args.model = torch.nn.parallel.DistributedDataParallel(args.model, device_ids=[args.gpu], output_device = 0)
+        args.model = torch.nn.parallel.DistributedDataParallel(args.model)
         args.model._set_static_graph()
     args.optimizer = args.optimizer(args.model.parameters(), **args.optimizer_args)
     args.criterion = args.model_without_ddp.loss_fn if args.criterion == "custom" else args.criterion()
