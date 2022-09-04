@@ -31,7 +31,6 @@ def _save(args):
             'epoch'                : args.epoch,
             'model_state_dict'     : args.model.state_dict(),
             'optimizer_state_dict' : args.optimizer.state_dict(),
-            'scaler_state_dict'    : args.scaler.state_dict(),
             'scheduler_state_dict' : args.scheduler.state_dict(),
         }, os.path.join(args.save_dir, 'checkpoint_{}.pth'.format(args.epoch)))
         print("Saved checkpoint to {}".format(os.path.join(args.save_dir, 'checkpoint_{}.pth'.format(args.epoch))))
@@ -49,7 +48,6 @@ def _load(args, load_idx = -1):
     try:
         args.model.load_state_dict(load_dict['model_state_dict'])
         args.optimizer.load_state_dict(load_dict['optimizer_state_dict'])
-        args.scaler.load_state_dict   (load_dict['scaler_state_dict'])
         args.scheduler.load_state_dict(load_dict['scheduler_state_dict'])
         epoch    = load_dict['epoch']
     except:
@@ -185,7 +183,6 @@ def worker(gpu, ngpus_per_node, args):
     args.optimizer = args.optimizer(args.model.parameters(), **args.optimizer_args)
     args.criterion = args.model_without_ddp.loss_fn if args.criterion == "custom" else args.criterion()
     args.scheduler = args.scheduler(args.optimizer, **args.scheduler_args)
-    args.scaler    = torch.cuda.amp.GradScaler(enabled=args.use_amp)
     args.epoch = 1
     _load(args)
 
@@ -239,21 +236,21 @@ def train(args):
             images = images.cuda(args.gpu, non_blocking=True)
         if torch.cuda.is_available():
             target = target.cuda(args.gpu, non_blocking=True)
-        with torch.cuda.amp.autocast(args.use_amp):
-            # compute output
-            output = args.model(images)
-            loss = args.criterion(output, target)
+            
+        # compute output
+        output = args.model(images)
+        loss = args.criterion(output, target)
+
         # measure accuracy and record loss
         acc1, acc5 = accuracy(output, target, topk=(1, 5))
         losses.update(loss.item(), images.size(0))
         top1.update(acc1[0], images.size(0))
         top5.update(acc5[0], images.size(0))
 
-        args.scaler.scale(loss).backward()
         # compute gradient and do SGD step
-        if i % args.step_size == args.step_size - 1 or i == len(args.data_loader_train) - 1:
-            args.scaler.step(args.optimizer)
-            args.scaler.update()
+        args.optimizer.zero_grad()
+        loss.backward()
+        args.optimizer.step()
 
         torch.cuda.synchronize()
         # measure elapsed time
