@@ -142,7 +142,7 @@ def worker(gpu, ngpus_per_node, args):
             print('Warning: Enabling distributed evaluation with an eval dataset not divisible by process number. '
                   'This will slightly alter validation results as extra duplicate entries are added to achieve '
                   'equal num of samples per-process.')
-    args.batch_size = args.batch_size / args.world_size
+    args.batch_size = int(args.batch_size / args.world_size)
 
     args.data_loader_train = torch.utils.data.DataLoader(
         args.dataset_train, sampler=args.sampler_train,
