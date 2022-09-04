@@ -271,10 +271,9 @@ def validate(args):
                 if torch.cuda.is_available():
                     target = target.cuda(args.gpu, non_blocking=True)
 
-                with torch.cuda.amp.autocast(args.use_amp):
-                    # compute output
-                    output = args.model(images)
-                    loss = args.criterion(output, target)
+                # compute output
+                output = args.model(images)
+                loss = args.criterion(output, target)
                 
                 torch.cuda.synchronize()
                 # measure accuracy and record loss
