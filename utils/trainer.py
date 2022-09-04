@@ -179,7 +179,6 @@ def worker(gpu, ngpus_per_node, args):
         pin_memory=args.pin_mem,
         drop_last=False
     )
-
     print(f"Creating model...")
     args.model = args.model(**args.model_args)
     args.model_without_ddp = args.model
