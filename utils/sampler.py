@@ -1,3 +1,4 @@
+from asyncio import tasks
 import torch
 import torch.distributed as dist
 import math
@@ -92,58 +93,52 @@ class CILSampler(torch.utils.data.Sampler):
         self.task = 0
         self.seed = seed
 
-        self.set_epoch(0)
-        self.prepare()
-        self.set_task(0)
+        self.g = torch.Generator()
+        self.g.manual_seed(self.seed)
+        stale = len(self.dataset.classes) - len(self.dataset.classes) % self.num_tasks
+        self.taskids = torch.randperm(len(self.dataset.classes), generator = self.g)
+        self.taskids = self.taskids[:stale].reshape(self.num_tasks, -1)
+        self.build()
         
+    def build(self):
+        self.g = torch.Generator()
+        self.g.manual_seed(self.seed + self.epoch)
+        if self.shuffle:
+            idx = torch.randperm(len(self.dataset) * self.num_replicas, generator=self.g) % len(self.dataset)
+        else:
+            idx = torch.arange(len(self.dataset) * self.num_replicas) % len(self.dataset)
+        sel = (torch.tensor(self.dataset.targets) == self.taskids[self.task].unsqueeze(-1)).nonzero()[:,1]
+        self.indices = idx[sel]
+
+        if self.distributed:
+            self.num_samples = int(len(self.indices.tolist()) / self.num_replicas)
+            self.total_size = self.num_samples * self.num_replicas  
+            self.num_selected_samples = int(len(self.indices.tolist()) // self.num_replicas)
+        else:
+            self.num_samples = int(len(self.indices.tolist()))
+            self.total_size = self.num_samples
+            self.num_selected_samples = int(len(self.indices.tolist()))
+
     def __iter__(self):
-        self.prepare()
+        self.build()
         if self.distributed:
             # subsample
-            indices = self.indices[self.task][self.rank:self.total_size:self.num_replicas].repeat(self.num_repeats)
-            assert len(indices) == self.num_samples
-            return iter(indices[:self.num_selected_samples])
+            self.indices = self.indices[self.rank:self.total_size:self.num_replicas]
+            assert len(self.indices) == self.num_samples
+            return iter(self.indices[:self.num_selected_samples])
         else:
-            indices = self.indices[self.task]
-            return iter(indices)
+            return iter(self.indices)
 
     def __len__(self):
         return self.num_selected_samples
-
-    def prepare(self):
-        # remove remainder class randomly
-        stale   = len(self.dataset.classes) - len(self.dataset.classes) % self.num_tasks
-        self.taskids = torch.randperm(len(self.dataset.classes), generator = self.g)
-        self.taskids = self.taskids[:stale].reshape(self.num_tasks, -1)
-        
-        self.indices = []
-        for i in range(self.num_tasks):
-            if self.shuffle:
-                idx = torch.randperm(len(self.dataset))
-            else:
-                idx = torch.arange(len(self.dataset))
-            sel = (torch.tensor(self.dataset.targets) == self.taskids[i].unsqueeze(-1)).nonzero()[:,1]
-            sel = idx[sel]
-            self.indices.append(sel)
-
+    
     def set_epoch(self, epoch):
         self.epoch = epoch
-        self.g = torch.Generator()
-        self.g.manual_seed(self.seed + self.epoch)
-        
+
     def set_task(self, task):
         if task >= self.num_tasks or task < 0:
             raise ValueError("Task index out of range")
-
         self.task = task
-        if self.distributed:
-            self.num_samples = int(len(self.indices[self.task]) * self.num_repeats / self.num_replicas)
-            self.total_size = self.num_samples * self.num_replicas
-            self.num_selected_samples = int(len(self.indices[self.task].tolist()) // self.num_replicas)
-        else:
-            self.num_samples = int(len(self.indices[self.task]) * self.num_repeats)
-            self.total_size = self.num_samples
-            self.num_selected_samples = int(len(self.indices[self.task].tolist()))
     
     def get_task(self):
         return self.taskids[self.task]

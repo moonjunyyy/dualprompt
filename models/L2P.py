@@ -63,9 +63,10 @@ class L2P(nn.Module):
         x = x[:, :self.selection_size * self.prompt_len, :].clone()
         x = self.avgpool(x).squeeze()
         x = self.classifier(x)
-        
-        if self.training:
-            x += + self.past_class.to(x.device)
+        #if self.training:
+            #x = x + self.past_class.to(x.device)
+            #x = x.softmax(-1)
+        self.simmilairty = _simmilarity.mean()
         return x
 
     def loss_fn(self, output, target, **kwargs):

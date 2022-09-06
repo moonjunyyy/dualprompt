@@ -2,6 +2,7 @@ import torch
 import torch.nn as nn
 import torch.nn.functional as F
 
+
 class Prompt(nn.Module):
     def __init__(self, pool_size : int, selection_size : int, prompt_len : int, dimention : int, batchwise_selection : bool = True, **kwargs):
         super(Prompt, self).__init__()
@@ -23,7 +24,9 @@ class Prompt(nn.Module):
 
     def forward(self, query : torch.Tensor, *args, **kwargs):
         self.to(query.device)
+        B, D = query.size()
         match = F.cosine_similarity(query.unsqueeze(1), self.key, dim = -1)
+        _, P = match.size()
         if self.training:
             topk    = match * F.normalize(1 / self.frequency, p=1, dim=-1)
         else :
@@ -33,11 +36,10 @@ class Prompt(nn.Module):
         if self.batchwise_selection:
             idx, counts = topk.unique(sorted=True, return_counts=True)
             _, mosts    = counts.topk(self.selection_size, largest = True, sorted = True)
-            topk        = idx[mosts].unsqueeze(0).repeat(query.size()[0], 1)
+            topk        = idx[mosts].unsqueeze(0).expand(B, -1)
         if self.training:
-            self.counter += topk.view(-1).bincount(minlength = self.pool_size)
-
-        return match[topk], self.prompt[topk]
+            self.counter += topk.contiguous().view(-1).bincount(minlength = self.pool_size)
+        return match.gather(-1, topk), self.prompt[topk, :, :]
 
     def update(self):
         self.frequency += self.counter
@@ -49,4 +51,4 @@ class Prompt(nn.Module):
         self.counter   = self.counter.to  (device)
         self.key.to      (device)
         self.prompt.to   (device)
-        return self
+        return self 

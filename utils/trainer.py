@@ -1,3 +1,4 @@
+from ast import arg
 import os
 import random
 import time
@@ -32,8 +33,8 @@ def _save(args):
             'model_state_dict'     : args.model.state_dict(),
             'optimizer_state_dict' : args.optimizer.state_dict(),
             'scheduler_state_dict' : args.scheduler.state_dict(),
-        }, os.path.join(args.save_dir, 'checkpoint_{}.pth'.format(args.epoch)))
-        print("Saved checkpoint to {}".format(os.path.join(args.save_dir, 'checkpoint_{}.pth'.format(args.epoch))))
+        }, os.path.join(args.save_path, 'checkpoint_{}.pth'.format(args.task_id)))
+        print("Saved checkpoint to {}".format(os.path.join(args.save_path, 'checkpoint_{}.pth'.format(args.task_id))))
         return
         
 def _load(args, load_idx = -1):
@@ -42,7 +43,7 @@ def _load(args, load_idx = -1):
     '''
     try:
         for e in range(1, args.epochs + 1):
-            load_dict = torch.load(os.path.join(args.save_dir, 'checkpoint_{}.pth'.format(e)))
+            load_dict = torch.load(os.path.join(args.save_path, 'checkpoint_{}.pth'.format(e)))
     except:
         pass
     try:
@@ -93,34 +94,7 @@ def setup_for_distributed(is_master):
             builtin_print(*args, **kwargs)
     __builtin__.print = print
 
-def set_task_train(args, task_id):
-    try:
-        args.data_loader_train = torch.utils.data.DataLoader(
-            args.dataset_train, sampler=args.sampler_train,
-            batch_size=args.batch_size,
-            num_workers=args.num_workers,
-            pin_memory=args.pin_mem,
-            drop_last=True,
-        )
-    except Exception as e:
-        raise e
-def set_task_val(args, task_id):
-    try:        
-        args.sampler_val.set_task(task_id)
-        args.data_loader_val = torch.utils.data.DataLoader(
-            args.dataset_val, sampler=args.sampler_val,
-            batch_size=int(1.5 * args.batch_size),
-            num_workers=args.num_workers,
-            pin_memory=args.pin_mem,
-            drop_last=False
-        )    
-    except Exception as e:
-        raise e
-
 def worker(gpu, ngpus_per_node, args):
-
-    os.environ['MASTER_ADDR'] = '127.0.0.1'
-    os.environ['MASTER_PORT'] = '29500'
 
     # For multiprocessing distributed training, get the rank of the processs
     if args.distributed:
@@ -129,20 +103,19 @@ def worker(gpu, ngpus_per_node, args):
     else :
         args.rank = None
         args.gpu  = 0
+        
     # os.environ['RANK']
     # os.environ['WORLD_SIZE']
     # os.environ['LOCAL_RANK']
     # os.environ['SLURM_PROCID']
 
-    if gpu is not None:
+    if args.gpu is not None:
         print('Using GPU:{} for training.'.format(args.gpu))
-
     if args.distributed:
         args.dist_backend = 'nccl'
         print('| distributed init (rank {}): {}'.format(args.rank, args.gpu))
         dist.init_process_group(backend=args.dist_backend, init_method=args.dist_url,
                                 rank=args.rank, world_size = args.world_size)
-
         torch.cuda.set_device(args.gpu)
         # Print is available only for the master process
         setup_for_distributed(is_main_process())
@@ -168,17 +141,33 @@ def worker(gpu, ngpus_per_node, args):
         args.dataset_train, num_tasks=args.num_tasks, num_replicas=world_size, rank=global_rank, seed=args.seed, shuffle=True)
     args.sampler_val   = CILSampler(
         args.dataset_val,   num_tasks=args.num_tasks, num_replicas=world_size, rank=global_rank, seed=args.seed, shuffle=False)
+
     args.batch_size = int(args.batch_size / args.world_size)
 
-    set_task_train(args, 0)
-    set_task_val(args, 0)
+    args.sampler_train.set_task(args.task_id)
+    args.sampler_val.set_task(args.test_id)
+    
+    args.data_loader_train = DataLoader(
+        args.dataset_train, sampler=args.sampler_train,
+        batch_size=args.batch_size,
+        num_workers=args.num_workers,
+        pin_memory=args.pin_mem,
+        drop_last=True
+    )
+    args.data_loader_val = DataLoader(
+        args.dataset_val, sampler=args.sampler_val,
+        batch_size=int(1.5 * args.batch_size),
+        num_workers=args.num_workers,
+        pin_memory=args.pin_mem,
+        drop_last=False
+    )
 
     print(f"Creating model...")
     args.model = args.model(**args.model_args)
-    args.model_without_ddp = args.model
     args.model.cuda(args.gpu)
+    args.model_without_ddp = args.model
     if args.distributed:
-        args.model = torch.nn.parallel.DistributedDataParallel(args.model)
+        args.model = torch.nn.parallel.DistributedDataParallel(args.model, find_unused_parameters=True)
         args.model._set_static_graph()
     args.optimizer = args.optimizer(args.model.parameters(), **args.optimizer_args)
     args.criterion = args.model_without_ddp.loss_fn if args.criterion == "custom" else args.criterion()
@@ -190,24 +179,28 @@ def worker(gpu, ngpus_per_node, args):
         args.log_interval = len(args.data_loader_val) // args.log_freqency
         validate(args)
         return
-
-    for task in range(args.num_tasks):
+    for args.task_id in range(0, args.num_tasks):
         args.log_interval = len(args.data_loader_train) // args.log_freqency
 
         print('')
-        print('Train Task {} :'.format(task))
-        set_task_train(args, task)
-        for epoch in range(args.epoch, args.epochs + 1):
-            args.sampler_train.set_epoch(epoch)
+        print('Train Task {} : {}'.format(args.task_id, args.sampler_train.get_task()))
+        
+        args.sampler_train.set_task(args.task_id)
+        args.model_without_ddp._convert_train_task(args.sampler_train.get_task())
+
+        for args.epoch in range(args.epoch, args.epochs + 1):
             # train for one epoch
+            args.sampler_train.set_epoch(args.epoch)
             train(args)
             print('')
             args.scheduler.step()
+
         # evaluate on validation set
-        for test in range(task + 1):
-            print('==> test for Task {} :'.format(test))
-            set_task_val(args, test)
+        for args.test_id in range(0, args.task_id + 1):
+            args.sampler_val.set_task(args.test_id)
             acc1 = validate(args)
+        args.epoch = 1
+    save_on_master(args)
     return
 
 def train(args):
@@ -223,12 +216,12 @@ def train(args):
 
     # switch to train mode
     args.model.train()
-
     end = time.time()
+
     for i, (images, target) in enumerate(args.data_loader_train):
         # measure data loading timeorprint
         data_time.update(time.time() - end)
-        
+
         if i % args.step_size == 0:
             args.optimizer.zero_grad()
 
@@ -240,19 +233,18 @@ def train(args):
         # compute output
         output = args.model(images)
         loss = args.criterion(output, target)
-
         # measure accuracy and record loss
         acc1, acc5 = accuracy(output, target, topk=(1, 5))
         losses.update(loss.item(), images.size(0))
         top1.update(acc1[0], images.size(0))
         top5.update(acc5[0], images.size(0))
 
-        # compute gradient and do SGD step
-        args.optimizer.zero_grad()
         loss.backward()
-        args.optimizer.step()
+        # compute gradient and do SGD step
+        if i % args.step_size == args.step_size - 1 or i == len(args.data_loader_train) - 1:
+            args.optimizer.step()
+            args.optimizer.zero_grad()
 
-        torch.cuda.synchronize()
         # measure elapsed time
         batch_time.update(time.time() - end)
         end = time.time()
@@ -275,7 +267,6 @@ def validate(args):
                 output = args.model(images)
                 loss = args.criterion(output, target)
                 
-                torch.cuda.synchronize()
                 # measure accuracy and record loss
                 acc1, acc5 = accuracy(output, target, topk=(1, 5))
                 losses.update(loss.item(), images.size(0))
@@ -285,9 +276,8 @@ def validate(args):
                 # measure elapsed time
                 batch_time.update(time.time() - end)
                 end = time.time()
-
               #  if i % args.log_interval == args.log_interval - 1 or i == len(loader) - 1:
-             #       progress.display(i + 1)
+              #      progress.display(i + 1)
 
     batch_time = AverageMeter('Time', ':6.3f', Summary.NONE)
     losses = AverageMeter('Loss', ':.4e', Summary.NONE)
@@ -300,19 +290,11 @@ def validate(args):
 
     # switch to evaluate mode
     args.model.eval()
-
     run_validate(args.data_loader_val)
+    torch.cuda.synchronize()
     if args.distributed:
         top1.all_reduce()
         top5.all_reduce()
-
-    if args.distributed and (len(args.data_loader_val.sampler) * args.world_size < len(args.data_loader_val.dataset)):
-        aux_val_dataset = Subset(args.data_loader_val.dataset,
-                                range(len(args.data_loader_val.sampler) * args.world_size, len(args.data_loader_val.dataset)))
-        aux_val_loader = DataLoader(
-            aux_val_dataset, batch_size=args.batch_size, shuffle=False,
-            num_workers=args.num_workers, pin_memory=True)
-        run_validate(aux_val_loader, len(args.data_loader_val))
     progress.display_summary()
 
     return top1.avg
@@ -323,6 +305,7 @@ def image_trainer(args):
 
     args.dataset_train  = args.dataset(args.dataset_path, download=True, train=True,  transform=transform)
     args.dataset_val    = args.dataset(args.dataset_path, download=True, train=False, transform=transform)
+
     args.epoch          = 1
     args.task_id        = 0
     args.test_id        = 0
@@ -335,6 +318,12 @@ def image_trainer(args):
 
     args.step_size      = int(args.step_size // args.batch_size)
     args.step_size      = args.step_size if args.step_size > 0 else 1
+
+    try:
+        os.mkdir(args.save_path)
+        print("There is no directory, make it...")
+    except Exception as e:
+        print(e)
 
     if args.task_governor is not None:
         print('Task governor is not implemented yet. Ignore the keyword and works CIL setting.')
@@ -349,7 +338,7 @@ def image_trainer(args):
             p = mp.Process(target = worker, args = (rank, ngpus_per_node, args))
             p.start()
             processes.append(p)
-        #mp.spawn(fn = worker, args = (ngpus_per_node, self.args), nprocs = self.args.world_size)
+
         for p in processes:
             p.join()
     else:
