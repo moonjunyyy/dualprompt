@@ -1,4 +1,3 @@
-from ast import arg
 import os
 import random
 import time
@@ -24,323 +23,281 @@ from utils.sampler import CILSampler
 # TODO : Other Task Settings (TIL, Task Agnostic)
 # TODO : Multi Node Distribution Code
 
-def _save(args):
-        r'''
-        Save the model.
-        '''
-        torch.save({
-            'epoch'                : args.epoch,
-            'model_state_dict'     : args.model.state_dict(),
-            'optimizer_state_dict' : args.optimizer.state_dict(),
-            'scheduler_state_dict' : args.scheduler.state_dict(),
-        }, os.path.join(args.save_path, 'checkpoint_{}.pth'.format(args.task_id)))
-        print("Saved checkpoint to {}".format(os.path.join(args.save_path, 'checkpoint_{}.pth'.format(args.task_id))))
-        return
+class Imgtrainer():
+    def __init__(self,
+                 model, model_args,
+                 criterion,
+                 optimizer, optimizer_args,
+                 scheduler, scheduler_args,
+                 batch_size, step_size, epochs, log_frequency,
+                 task_governor, num_tasks,
+                 dataset, num_workers, dataset_path, save_path,
+                 seed, device, pin_mem, use_amp, debug,
+                 num_nodes, dist_url, dist_backend,
+                 *args,**kwargs) -> None:
         
-def _load(args, load_idx = -1):
-    r'''
-    Load the model.
-    '''
-    try:
-        for e in range(1, args.epochs + 1):
-            load_dict = torch.load(os.path.join(args.save_path, 'checkpoint_{}.pth'.format(e)))
-    except:
+        self.model = model
+        self.model_args = model_args
+        self.criterion = criterion
+        self.optimizer = optimizer
+        self.optimizer_args = optimizer_args
+        self.scheduler = scheduler
+        self.scheduler_args = scheduler_args
+
+        self.batch_size = batch_size
+        self.step_size = step_size
+        self.epoch = 0
+        self.epochs = epochs
+        self.log_frequency = log_frequency
+        self.task_governor = task_governor
+
+        self.num_tasks = num_tasks
+        self.num_workers = num_workers
+        self.dataset_path = dataset_path
+        self.save_path = save_path
+        self.seed = seed
+        self.device = device
+        self.pin_mem = pin_mem
+        self.use_amp = use_amp
+        self.debug = debug
+        
+        # Transform needs to be diversed and be selected by user
+        transform = transforms.Compose([transforms.Resize(224),
+                                        transforms.ToTensor ()])
+        self.dataset_train  = dataset(dataset_path, download=True, train=True,  transform=transform)
+        self.dataset_val    = dataset(dataset_path, download=True, train=False, transform=transform)
+
+        self.distributed = num_nodes > 1 or torch.cuda.device_count() > 1
+        self.world_size = num_nodes * torch.cuda.device_count()
+        self.ngpus_per_node = torch.cuda.device_count()
+
+        self.num_nodes = num_nodes
+        self.dist_url = dist_url
+        self.dist_backend = dist_backend
         pass
-    try:
-        args.model.load_state_dict(load_dict['model_state_dict'])
-        args.optimizer.load_state_dict(load_dict['optimizer_state_dict'])
-        args.scheduler.load_state_dict(load_dict['scheduler_state_dict'])
-        epoch    = load_dict['epoch']
-    except:
-        print("Load failed. Start from Scratch.")
-        return
-    print("Loaded model from epoch {}".format(epoch))
-    return args
 
-def save_on_master(args):
-    if is_main_process():
-        _save(args)
-
-def is_dist_avail_and_initialized():
-    if not dist.is_available():
-        return False
-    if not dist.is_initialized():
-        return False
-    return True
-
-def get_world_size():
-    if not is_dist_avail_and_initialized():
-        return 1
-    return dist.get_world_size()
-
-def get_rank():
-    if not is_dist_avail_and_initialized():
-        return 0
-    return dist.get_rank()
-
-def is_main_process():
-    return get_rank() == 0
-
-def setup_for_distributed(is_master):
-    """
-    This function disables printing when not in master process
-    """
-    import builtins as __builtin__
-    builtin_print = __builtin__.print
-
-    def print(*args, **kwargs):
-        force = kwargs.pop('force', False)
-        if is_master or force:
-            builtin_print(*args, **kwargs)
-    __builtin__.print = print
-
-def worker(gpu, ngpus_per_node, args):
-
-    # For multiprocessing distributed training, get the rank of the processs
-    if args.distributed:
-        args.rank = gpu 
-        args.gpu  = args.rank % ngpus_per_node
-    else :
-        args.rank = None
-        args.gpu  = 0
-        
-    # os.environ['RANK']
-    # os.environ['WORLD_SIZE']
-    # os.environ['LOCAL_RANK']
-    # os.environ['SLURM_PROCID']
-
-    if args.gpu is not None:
-        print('Using GPU:{} for training.'.format(args.gpu))
-    if args.distributed:
-        args.dist_backend = 'nccl'
-        print('| distributed init (rank {}): {}'.format(args.rank, args.gpu))
-        dist.init_process_group(backend=args.dist_backend, init_method=args.dist_url,
-                                rank=args.rank, world_size = args.world_size)
-        torch.cuda.set_device(args.gpu)
-        # Print is available only for the master process
-        setup_for_distributed(is_main_process())
-        dist.barrier()
-
-    # Set deterministic seed for reproducibility
-    if args.seed is not None:
-        seed = args.seed + get_rank()
-        random.seed(seed)
-        torch.manual_seed(seed)
-        cudnn.deterministic = True
-        print('You have chosen to seed training. '
-              'This will turn on the CUDNN deterministic setting, '
-              'which can slow down your training considerably! '
-              'You may see unexpected behavior when restarting '
-              'from checkpoints.')
-        cudnn.benchmark = True
-
-    world_size  = get_world_size() if args.distributed else None
-    global_rank = get_rank()       if args.distributed else None
-
-    args.sampler_train = CILSampler(
-        args.dataset_train, num_tasks=args.num_tasks, num_replicas=world_size, rank=global_rank, seed=args.seed, shuffle=True)
-    args.sampler_val   = CILSampler(
-        args.dataset_val,   num_tasks=args.num_tasks, num_replicas=world_size, rank=global_rank, seed=args.seed, shuffle=False)
-
-    args.batch_size = int(args.batch_size / args.world_size)
-
-    args.sampler_train.set_task(args.task_id)
-    args.sampler_val.set_task(args.test_id)
+    def run(self):
+        if self.distributed:
+            print("Initializing Distributed Process Group")
+            mp.spawn(self.main_worker,
+                     nprocs=self.ngpus_per_node,
+                     args=(self.ngpus_per_node,
+                     self.world_size))
+        else:
+            print("Initializing Single Process")
+            self.main_worker(0, 1, 1)
+        pass
     
-    args.data_loader_train = DataLoader(
-        args.dataset_train, sampler=args.sampler_train,
-        batch_size=args.batch_size,
-        num_workers=args.num_workers,
-        pin_memory=args.pin_mem,
-        drop_last=True
-    )
-    args.data_loader_val = DataLoader(
-        args.dataset_val, sampler=args.sampler_val,
-        batch_size=int(1.5 * args.batch_size),
-        num_workers=args.num_workers,
-        pin_memory=args.pin_mem,
-        drop_last=False
-    )
+    def main_worker(self, rank, ngpus_per_node, world_size):
+        if self.distributed:
+            os.environ['MASTER_ADDR'] = self.dist_url
+            os.environ['MASTER_PORT'] = '12355'
+            dist.init_process_group(backend=self.dist_backend,
+                                    init_method=self.dist_url,
+                                    world_size=world_size,
+                                    rank=rank)
+            torch.cuda.set_device(rank)
+            # Print is available only for the master process
+            self.setup_for_distributed(self.is_main_process())
+            dist.barrier()
+        print('| distributed init (rank {}): {}'.format(rank, rank))
 
-    print(f"Creating model...")
-    args.model = args.model(**args.model_args)
-    args.model.cuda(args.gpu)
-    args.model_without_ddp = args.model
-    if args.distributed:
-        args.model = torch.nn.parallel.DistributedDataParallel(args.model, find_unused_parameters=True)
-        args.model._set_static_graph()
-    args.optimizer = args.optimizer(args.model.parameters(), **args.optimizer_args)
-    args.criterion = args.model_without_ddp.loss_fn if args.criterion == "custom" else args.criterion()
-    args.scheduler = args.scheduler(args.optimizer, **args.scheduler_args)
-    args.epoch = 1
-    _load(args)
+        if self.seed is not None:
+            seed = self.seed + rank
+            random.seed(seed)
+            torch.manual_seed(seed)
+            cudnn.deterministic = True
+            print('You have chosen to seed training. '
+                'This will turn on the CUDNN deterministic setting, '
+                'which can slow down your training considerably! '
+                'You may see unexpected behavior when restarting '
+                'from checkpoints.')
+        cudnn.benchmark = True
+        _r = dist.get_rank() if self.distributed else None # means that it is not distributed
+        _w = dist.get_world_size() if self.distributed else None # means that it is not distributed
+        sampler_train = CILSampler(self.dataset_train, self.num_tasks, _w, _r, shuffle=True, seed=self.seed)
+        sampler_val   = CILSampler(self.dataset_val  , self.num_tasks, _w, _r, shuffle=False, seed=self.seed)
+        self.batch_size = self.batch_size // self.world_size
+        loader_train  = DataLoader(self.dataset_train,
+                                   batch_size=self.batch_size,
+                                   sampler=sampler_train,
+                                   num_workers=self.num_workers,
+                                   pin_memory=self.pin_mem)              
+        loader_val    = DataLoader(self.dataset_train,
+                                   batch_size=self.batch_size,
+                                   sampler=sampler_val,
+                                   num_workers=self.num_workers,
+                                   pin_memory=self.pin_mem)
 
-    if not args.training:
-        args.log_interval = len(args.data_loader_val) // args.log_freqency
-        validate(args)
-        return
-    for args.task_id in range(0, args.num_tasks):
-        args.log_interval = len(args.data_loader_train) // args.log_freqency
+        model = self.model(**self.model_args)
+        model.cuda(rank)
+        model_without_ddp = model
+        if self.distributed:
+            model = torch.nn.parallel.DistributedDataParallel(model)
+            model_without_ddp = self.model.module
+        criterion = model_without_ddp.loss_fn if self.criterion == 'custom' else self.criterion()
+        optimizer = self.optimizer(model.parameters(), **self.optimizer_args)
+        scheduler = self.scheduler(optimizer, **self.scheduler_args)
 
-        print('')
-        print('Train Task {} : {}'.format(args.task_id, args.sampler_train.get_task()))
-        
-        args.sampler_train.set_task(args.task_id)
-        args.model_without_ddp._convert_train_task(args.sampler_train.get_task())
+        for task in range(self.num_tasks):
+            sampler_train.set_task(task)
+            model_without_ddp._convert_train_task(sampler_train.get_task())
+            print(f"Training for task {task}")
+            for self.epoch in range(self.epoch, self.epochs):
+                self.train(loader_train, model, criterion, optimizer)
+                scheduler.step()
+            for test in range(task + 1):
+                sampler_val.set_task(test)
+                self.validate(loader_val, model, criterion, optimizer)
 
-        for args.epoch in range(args.epoch, args.epochs + 1):
-            # train for one epoch
-            args.sampler_train.set_epoch(args.epoch)
-            train(args)
-            print('')
-            args.scheduler.step()
-
-        # evaluate on validation set
-        for args.test_id in range(0, args.task_id + 1):
-            args.sampler_val.set_task(args.test_id)
-            acc1 = validate(args)
-        args.epoch = 1
-    save_on_master(args)
-    return
-
-def train(args):
-    batch_time = AverageMeter('Time', ':6.3f')
-    data_time  = AverageMeter('Data', ':6.3f')
-    losses     = AverageMeter('Loss', ':.4e')
-    top1       = AverageMeter('Acc@1', ':6.2f')
-    top5       = AverageMeter('Acc@5', ':6.2f')
-    progress   = ProgressMeter(
-        len(args.data_loader_train),
-        [batch_time, data_time, losses, top1, top5],
-        prefix="Epoch: [{}]".format(args.epoch))
-
-    # switch to train mode
-    args.model.train()
-    end = time.time()
-
-    for i, (images, target) in enumerate(args.data_loader_train):
-        # measure data loading timeorprint
-        data_time.update(time.time() - end)
-
-        if i % args.step_size == 0:
-            args.optimizer.zero_grad()
-
-        if args.gpu is not None:
-            images = images.cuda(args.gpu, non_blocking=True)
-        if torch.cuda.is_available():
-            target = target.cuda(args.gpu, non_blocking=True)
-            
-        # compute output
-        output = args.model(images)
-        loss = args.criterion(output, target)
-        # measure accuracy and record loss
-        acc1, acc5 = accuracy(output, target, topk=(1, 5))
-        losses.update(loss.item(), images.size(0))
-        top1.update(acc1[0], images.size(0))
-        top5.update(acc5[0], images.size(0))
-
-        loss.backward()
-        # compute gradient and do SGD step
-        if i % args.step_size == args.step_size - 1 or i == len(args.data_loader_train) - 1:
-            args.optimizer.step()
-            args.optimizer.zero_grad()
-
-        # measure elapsed time
-        batch_time.update(time.time() - end)
+    def train(self, loader, model, criterion, optimizer):
+        batch_time = AverageMeter('Time', ':6.3f')
+        data_time  = AverageMeter('Data', ':6.3f')
+        losses     = AverageMeter('Loss', ':.4e')
+        top1       = AverageMeter('Acc@1', ':6.2f')
+        top5       = AverageMeter('Acc@5', ':6.2f')
+        progress   = ProgressMeter(
+            len(loader),
+            [batch_time, data_time, losses, top1, top5],
+            prefix="Epoch: [{}]".format(self.epoch))
+        # switch to train mode
+        model.train()
+        log_interval = len(loader) / self.log_frequency
         end = time.time()
+        optimizer.zero_grad()
+        for i, (images, target) in enumerate(loader):
+            # measure data loading time
+            data_time.update(time.time() - end)
+            images, target = images.to(self.device), target.to(self.device)
 
-        if i % args.log_interval == args.log_interval - 1 or i == len(args.data_loader_train) - 1:
-            progress.display(i + 1)
+            # compute output
+            output = model(images)
+            loss = criterion(output, target)
+            torch.cuda.synchronize()        
 
-def validate(args):
-    def run_validate(loader, base_progress=0):
-        with torch.no_grad():
+            # measure accuracy and record loss
+            acc1, acc5 = accuracy(output, target, topk=(1, 5))
+            losses.update(loss.item(), images.size(0))
+            top1.update(acc1[0], images.size(0))
+            top5.update(acc5[0], images.size(0))
+
+            # compute gradient and do SGD step
+            loss.backward()
+
+            # measure elapsed time
+            batch_time.update(time.time() - end)
             end = time.time()
-            for i, (images, target) in enumerate(loader):
-                i = base_progress + i
-                if args.gpu is not None:
-                    images = images.cuda(args.gpu, non_blocking=True)
-                if torch.cuda.is_available():
-                    target = target.cuda(args.gpu, non_blocking=True)
 
-                # compute output
-                output = args.model(images)
-                loss = args.criterion(output, target)
+            if i % self.step_size == 0 or i == len(loader) - 1:
+                optimizer.step()
+                optimizer.zero_grad()
+            if i % log_interval == 0 or i == len(loader) - 1:
+                progress.display(i)
                 
-                # measure accuracy and record loss
-                acc1, acc5 = accuracy(output, target, topk=(1, 5))
-                losses.update(loss.item(), images.size(0))
-                top1.update(acc1[0], images.size(0))
-                top5.update(acc5[0], images.size(0))
-
-                # measure elapsed time
-                batch_time.update(time.time() - end)
+    def validate(self, loader, model, criterion):
+        def run_validate(loader, base_progress=0):
+            with torch.no_grad():
                 end = time.time()
-              #  if i % args.log_interval == args.log_interval - 1 or i == len(loader) - 1:
-              #      progress.display(i + 1)
+                for i, (images, target) in enumerate(loader):
+                    # compute output
+                    output = model(images)
+                    loss = criterion(output, target)
+                    torch.cuda.synchronize()
 
-    batch_time = AverageMeter('Time', ':6.3f', Summary.NONE)
-    losses = AverageMeter('Loss', ':.4e', Summary.NONE)
-    top1 = AverageMeter('Acc@1', ':6.2f', Summary.AVERAGE)
-    top5 = AverageMeter('Acc@5', ':6.2f', Summary.AVERAGE)
-    progress = ProgressMeter(
-        len(args.data_loader_val) + (args.distributed and (len(args.data_loader_val.sampler) * args.world_size < len(args.data_loader_val.dataset))),
-        [batch_time, losses, top1, top5],
-        prefix='Test: ')
+                    # measure accuracy and record loss
+                    acc1, acc5 = accuracy(output, target, topk=(1, 5))
+                    losses.update(loss.item(), images.size(0))
+                    top1.update(acc1[0], images.size(0))
+                    top5.update(acc5[0], images.size(0))
 
-    # switch to evaluate mode
-    args.model.eval()
-    run_validate(args.data_loader_val)
-    torch.cuda.synchronize()
-    if args.distributed:
-        top1.all_reduce()
-        top5.all_reduce()
-    progress.display_summary()
+                    # measure elapsed time
+                    batch_time.update(time.time() - end)
+                    end = time.time()
 
-    return top1.avg
+        batch_time = AverageMeter('Time', ':6.3f', Summary.NONE)
+        losses = AverageMeter('Loss', ':.4e', Summary.NONE)
+        top1 = AverageMeter('Acc@1', ':6.2f', Summary.AVERAGE)
+        top5 = AverageMeter('Acc@5', ':6.2f', Summary.AVERAGE)
+        progress = ProgressMeter(
+            len(loader) + (self.distributed and (len(loader) * self.world_size < len(loader))),
+            [batch_time, losses, top1, top5],
+            prefix='Test: ')
 
-def image_trainer(args):
-    transform = transforms.Compose([transforms.Resize(224),
-                                    transforms.ToTensor ()])
+        # switch to evaluate mode
+        model.eval()
+        run_validate(loader)
+        if self.distributed:
+            top1.all_reduce()
+            top5.all_reduce()
+        progress.display_summary()
 
-    args.dataset_train  = args.dataset(args.dataset_path, download=True, train=True,  transform=transform)
-    args.dataset_val    = args.dataset(args.dataset_path, download=True, train=False, transform=transform)
+        return top1.avg
+    def save_on_master(self):
+        if self.is_main_process():
+            self.save(self)
 
-    args.epoch          = 1
-    args.task_id        = 0
-    args.test_id        = 0
-    args.log_interval   = 0
-    args.training       = True
-    args.world_size     = args.num_nodes * torch.cuda.device_count()
-    print("world_size: ", args.world_size)
-    args.distributed    = args.world_size > 1
-    print("distributed: ", args.distributed)
+    def is_dist_avail_and_initialized(self):
+        if not dist.is_available():
+            return False
+        if not dist.is_initialized():
+            return False
+        return True
 
-    args.step_size      = int(args.step_size // args.batch_size)
-    args.step_size      = args.step_size if args.step_size > 0 else 1
+    def get_world_size(self):
+        if not self.is_dist_avail_and_initialized():
+            return 1
+        return dist.get_world_size()
 
-    try:
-        os.mkdir(args.save_path)
-        print("There is no directory, make it...")
-    except Exception as e:
-        print(e)
+    def get_rank(self):
+        if not self.is_dist_avail_and_initialized():
+            return 0
+        return dist.get_rank()
 
-    if args.task_governor is not None:
-        print('Task governor is not implemented yet. Ignore the keyword and works CIL setting.')
-        args.task_governor = None
+    def is_main_process(self):
+        return self.get_rank() == 0
 
-    mp.set_start_method('spawn')
-    ngpus_per_node = torch.cuda.device_count()
-    if args.distributed:
-        processes = []
-        for rank in range(args.world_size):
-            print("start rank {} ...".format(rank))
-            p = mp.Process(target = worker, args = (rank, ngpus_per_node, args))
-            p.start()
-            processes.append(p)
+    def setup_for_distributed(self, is_master):
+        """
+        This function disables printing when not in master process
+        """
+        import builtins as __builtin__
+        builtin_print = __builtin__.print
 
-        for p in processes:
-            p.join()
-    else:
-        worker(ngpus_per_node, ngpus_per_node, args)
-    return
+        def print(*args, **kwargs):
+            force = kwargs.pop('force', False)
+            if is_master or force:
+                builtin_print(*args, **kwargs)
+        __builtin__.print = print
+
+    def save(self):
+            r'''
+            Save the model.
+            '''
+            torch.save({
+                'epoch'                : self.epoch,
+                'model_state_dict'     : self.model.state_dict(),
+                'optimizer_state_dict' : self.optimizer.state_dict(),
+                'scheduler_state_dict' : self.scheduler.state_dict(),
+            }, os.path.join(self.save_path, 'checkpoint_{}.pth'.format(self.epoch)))
+            print("Saved checkpoint to {}".format(os.path.join(self.save_path, 'checkpoint_{}.pth'.format(self.epoch))))
+            return
+            
+    def load(self, load_idx = -1):
+        r'''
+        Load the model.
+        '''
+        try:
+            for e in range(1, self.epochs + 1 if load_idx == -1 else load_idx):
+                load_dict = torch.load(os.path.join(self.save_path, 'checkpoint_{}.pth'.format(e)))
+        except:
+            pass
+        try:
+            self.model.load_state_dict(load_dict['model_state_dict'])
+            self.optimizer.load_state_dict(load_dict['optimizer_state_dict'])
+            self.scheduler.load_state_dict(load_dict['scheduler_state_dict'])
+            self.epoch = load_dict['epoch']
+        except:
+            print("Load failed. Start from Scratch.")
+            return
+        print("Loaded model from epoch {}".format(self.epoch))
+        return

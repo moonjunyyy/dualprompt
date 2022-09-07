@@ -97,7 +97,7 @@ parser.add_argument("--scheduler"    , type=str, help="learning Rate Scheduler t
 parser.add_argument("--batch_size"    , type=int, help="batch size of data")
 parser.add_argument("--step_size"     , type=int, help="number of batches for accumulate gradient")
 parser.add_argument("--epochs"       , type=int, help="iteration of dataset for training")
-parser.add_argument("--log_freqency" , type=int, help="number of print for a epoch")
+parser.add_argument("--log_frequency" , type=int, help="number of print for a epoch")
 
 parser.add_argument("--num_tasks"     , type=int, default=1,help="task numbers")
 parser.add_argument("--task_governor" , type=str, default=None, help="setting of continual learning for multiple task")
@@ -129,6 +129,7 @@ dualprompt.add_argument("--pos_g_prompt" , type=int, default = 1, nargs='+')
 dualprompt.add_argument("--len_g_prompt" , type=int)
 dualprompt.add_argument("--pos_e_prompt" , type=int, default = 2, nargs='+')
 dualprompt.add_argument("--len_e_prompt" , type=int)
+dualprompt.add_argument("--lambda"       , type=float, default=1.0)
 dualprompt.add_argument("--prompt_func"  , type=str)
 
 # L2P Parser
@@ -137,6 +138,7 @@ l2p.add_argument("--backbone_name" , type=str)
 l2p.add_argument("--pool_size"     , type=int, default=10)
 l2p.add_argument("--selection_size", type=int, default=5)
 l2p.add_argument("--prompt_len"    , type=int, default=5)
+l2p.add_argument("--lambda"        , type=float, default=0.5)
 l2p.add_argument("--batchwise_selection" , default=False, action= argparse.BooleanOptionalAction, help="no batchwise selection for")
 ############################################################################
 #  Optimizer Parser for Each                                               #
