@@ -1,4 +1,5 @@
 from asyncio import tasks
+from distutils.command.build import build
 import torch
 import torch.distributed as dist
 import math
@@ -84,8 +85,8 @@ class CILSampler(torch.utils.data.Sampler):
 
         self.distributed = num_replicas is not None and rank is not None
         self.dataset = dataset
-        self.num_replicas = num_replicas
-        self.rank = rank
+        self.num_replicas = num_replicas if num_replicas is not None else 1
+        self.rank = rank if rank is not None else 0
         self.num_repeats = num_repeats
         self.epoch = 0
         self.shuffle = shuffle
@@ -95,23 +96,22 @@ class CILSampler(torch.utils.data.Sampler):
 
         self.g = torch.Generator()
         self.g.manual_seed(self.seed)
+
         stale = len(self.dataset.classes) - len(self.dataset.classes) % self.num_tasks
         self.taskids = torch.randperm(len(self.dataset.classes), generator = self.g)
         self.taskids = self.taskids[:stale].reshape(self.num_tasks, -1)
         self.build()
         
     def build(self):
-        self.g = torch.Generator()
         self.g.manual_seed(self.seed + self.epoch)
         if self.shuffle:
             idx = torch.randperm(len(self.dataset) * self.num_replicas, generator=self.g) % len(self.dataset)
         else:
             idx = torch.arange(len(self.dataset) * self.num_replicas) % len(self.dataset)
-        sel = (torch.tensor(self.dataset.targets) == self.taskids[self.task].unsqueeze(-1)).nonzero()[:,1]
-        self.indices = idx[sel]
-
+        sel = (torch.tensor(self.dataset.targets)[idx] == self.taskids[self.task].unsqueeze(-1)).sum(0).nonzero()
+        self.indices = idx[sel].squeeze()
         if self.distributed:
-            self.num_samples = int(len(self.indices.tolist()) / self.num_replicas)
+            self.num_samples = int(len(self.indices.tolist()) // self.num_replicas)
             self.total_size = self.num_samples * self.num_replicas  
             self.num_selected_samples = int(len(self.indices.tolist()) // self.num_replicas)
         else:

@@ -34,7 +34,7 @@ class Imgtrainer():
                  dataset, num_workers, dataset_path, save_path,
                  seed, device, pin_mem, use_amp, debug,
                  num_nodes, dist_url, dist_backend,
-                 *args,**kwargs) -> None:
+                 *args, **kwargs) -> None:
         
         self.model = model
         self.model_args = model_args
@@ -45,12 +45,13 @@ class Imgtrainer():
         self.scheduler_args = scheduler_args
 
         self.batch_size = batch_size
-        self.step_size = step_size
+        self.step_size = int(step_size // batch_size)
         self.epoch = 0
         self.epochs = epochs
         self.log_frequency = log_frequency
         self.task_governor = task_governor
 
+        self.training = True
         self.num_tasks = num_tasks
         self.num_workers = num_workers
         self.dataset_path = dataset_path
@@ -88,19 +89,32 @@ class Imgtrainer():
             self.main_worker(0, 1, 1)
         pass
     
+    def set_task(self, dataset, sampler, task):
+        sampler.set_task(task)
+        loader = DataLoader(dataset,
+                            batch_size=self.batch_size,
+                            sampler=sampler,
+                            num_workers=self.num_workers,
+                            pin_memory=self.pin_mem)  
+        return loader
+
     def main_worker(self, rank, ngpus_per_node, world_size):
         if self.distributed:
-            os.environ['MASTER_ADDR'] = self.dist_url
+            os.environ['MASTER_ADDR'] = '127.0.0.1'
             os.environ['MASTER_PORT'] = '12355'
+            print('| distributed init (rank {}): {}'.format(rank, self.device))
             dist.init_process_group(backend=self.dist_backend,
                                     init_method=self.dist_url,
                                     world_size=world_size,
                                     rank=rank)
             torch.cuda.set_device(rank)
+            self.device = torch.device(rank)
             # Print is available only for the master process
             self.setup_for_distributed(self.is_main_process())
             dist.barrier()
-        print('| distributed init (rank {}): {}'.format(rank, rank))
+        else:
+            self.device = torch.device('cuda') if torch.cuda.is_available() else torch.device('cpu')
+            print(f"Work on {self.device}")
 
         if self.seed is not None:
             seed = self.seed + rank
@@ -115,40 +129,45 @@ class Imgtrainer():
         cudnn.benchmark = True
         _r = dist.get_rank() if self.distributed else None # means that it is not distributed
         _w = dist.get_world_size() if self.distributed else None # means that it is not distributed
+        
         sampler_train = CILSampler(self.dataset_train, self.num_tasks, _w, _r, shuffle=True, seed=self.seed)
         sampler_val   = CILSampler(self.dataset_val  , self.num_tasks, _w, _r, shuffle=False, seed=self.seed)
-        self.batch_size = self.batch_size // self.world_size
-        loader_train  = DataLoader(self.dataset_train,
-                                   batch_size=self.batch_size,
-                                   sampler=sampler_train,
-                                   num_workers=self.num_workers,
-                                   pin_memory=self.pin_mem)              
-        loader_val    = DataLoader(self.dataset_train,
-                                   batch_size=self.batch_size,
-                                   sampler=sampler_val,
-                                   num_workers=self.num_workers,
-                                   pin_memory=self.pin_mem)
+
+        self.batch_size = int(self.batch_size // self.world_size)
 
         model = self.model(**self.model_args)
         model.cuda(rank)
         model_without_ddp = model
+
         if self.distributed:
             model = torch.nn.parallel.DistributedDataParallel(model)
-            model_without_ddp = self.model.module
+            model_without_ddp = model.module
         criterion = model_without_ddp.loss_fn if self.criterion == 'custom' else self.criterion()
         optimizer = self.optimizer(model.parameters(), **self.optimizer_args)
+        initial_optim = optimizer.state_dict()
         scheduler = self.scheduler(optimizer, **self.scheduler_args)
 
+        if not self.training:
+                self.validate(self.dataset_val, sampler_val, test) 
+                return
+
         for task in range(self.num_tasks):
-            sampler_train.set_task(task)
-            model_without_ddp._convert_train_task(sampler_train.get_task())
-            print(f"Training for task {task}")
-            for self.epoch in range(self.epoch, self.epochs):
+            loader_train = self.set_task(self.dataset_train, sampler_train, task)
+            print(model_without_ddp._convert_train_task(sampler_train.get_task()))
+            print(f"Training for task {task} : {sampler_train.get_task()}")
+
+            for self.epoch in range(self.epochs):
+                sampler_train.set_epoch(self.epoch)
                 self.train(loader_train, model, criterion, optimizer)
+                print('')
                 scheduler.step()
+
             for test in range(task + 1):
-                sampler_val.set_task(test)
-                self.validate(loader_val, model, criterion, optimizer)
+                loader_val = self.set_task(self.dataset_val, sampler_val, test) 
+                self.validate(loader_val, model, criterion)
+            self.epoch = 0
+            optimizer.load_state_dict(initial_optim)
+            print('')
 
     def train(self, loader, model, criterion, optimizer):
         batch_time = AverageMeter('Time', ':6.3f')
@@ -159,21 +178,18 @@ class Imgtrainer():
         progress   = ProgressMeter(
             len(loader),
             [batch_time, data_time, losses, top1, top5],
-            prefix="Epoch: [{}]".format(self.epoch))
+            prefix="Epoch: [{}]".format(self.epoch + 1))
         # switch to train mode
         model.train()
-        log_interval = len(loader) / self.log_frequency
+        log_interval = int(len(loader) // self.log_frequency)
         end = time.time()
-        optimizer.zero_grad()
         for i, (images, target) in enumerate(loader):
             # measure data loading time
             data_time.update(time.time() - end)
             images, target = images.to(self.device), target.to(self.device)
-
             # compute output
             output = model(images)
             loss = criterion(output, target)
-            torch.cuda.synchronize()        
 
             # measure accuracy and record loss
             acc1, acc5 = accuracy(output, target, topk=(1, 5))
@@ -188,21 +204,21 @@ class Imgtrainer():
             batch_time.update(time.time() - end)
             end = time.time()
 
-            if i % self.step_size == 0 or i == len(loader) - 1:
+            if i % self.step_size == self.step_size - 1 or i == len(loader) - 1:
                 optimizer.step()
                 optimizer.zero_grad()
-            if i % log_interval == 0 or i == len(loader) - 1:
-                progress.display(i)
+            if i % log_interval == log_interval - 1 or i == len(loader) - 1:
+                progress.display(i + 1)
                 
     def validate(self, loader, model, criterion):
         def run_validate(loader, base_progress=0):
             with torch.no_grad():
                 end = time.time()
                 for i, (images, target) in enumerate(loader):
+                    images, target = images.to(self.device), target.to(self.device)
                     # compute output
                     output = model(images)
                     loss = criterion(output, target)
-                    torch.cuda.synchronize()
 
                     # measure accuracy and record loss
                     acc1, acc5 = accuracy(output, target, topk=(1, 5))
@@ -226,6 +242,7 @@ class Imgtrainer():
         # switch to evaluate mode
         model.eval()
         run_validate(loader)
+        torch.cuda.synchronize()
         if self.distributed:
             top1.all_reduce()
             top5.all_reduce()
