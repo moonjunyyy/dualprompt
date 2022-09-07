@@ -6,6 +6,7 @@ from helper.argvs import parse_args
 from utils.trainer import Imgtrainer
 
 os.environ["TORCH_DISTRIBUTED_DEBUG"]="DETAIL"
+os.environ['CUDA_LAUNCH_BLOCKING'] = "1"
 
 def main(kwargs):
     print(kwargs)

@@ -1,4 +1,3 @@
-from dis import dis
 import os
 import random
 import time
@@ -113,7 +112,6 @@ class Imgtrainer():
                 'which can slow down your training considerably! '
                 'You may see unexpected behavior when restarting '
                 'from checkpoints.')
-
         cudnn.benchmark = True
         _r = dist.get_rank() if self.distributed else None # means that it is not distributed
         _w = dist.get_world_size() if self.distributed else None # means that it is not distributed
@@ -151,7 +149,6 @@ class Imgtrainer():
             for test in range(task + 1):
                 sampler_val.set_task(test)
                 self.validate(loader_val, model, criterion, optimizer)
-            
 
     def train(self, loader, model, criterion, optimizer):
         batch_time = AverageMeter('Time', ':6.3f')
@@ -196,7 +193,7 @@ class Imgtrainer():
                 optimizer.zero_grad()
             if i % log_interval == 0 or i == len(loader) - 1:
                 progress.display(i)
-
+                
     def validate(self, loader, model, criterion):
         def run_validate(loader, base_progress=0):
             with torch.no_grad():
