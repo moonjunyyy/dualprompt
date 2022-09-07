@@ -1,3 +1,4 @@
+from turtle import forward
 import timm
 import torch
 import torch.nn as nn
@@ -13,81 +14,70 @@ class L2P(nn.Module):
                  prompt_len     : int   = 5,
                  class_num      : int   = 100,
                  backbone_name  : str   = None,
+                 lambd          : float = 0.1,
                  batchwise_selection : bool = False,
                  **kwargs):
-
-        super(L2P, self).__init__()
+        super().__init__()
+        
         if backbone_name is None:
             raise ValueError('backbone_name must be specified')
+        if pool_size < selection_size:
+            raise ValueError('pool_size must be larger than selection_size')
 
+        self.prompt_len = prompt_len
         self.selection_size = selection_size
-        self.prompt_len     = prompt_len
-        self.class_num      = class_num
-        
-        self.backbone = timm.create_model(backbone_name, pretrained=True)
-        self.add_module('backbone', self.backbone)
+        self.lambd = lambd
+        self.batchwise_selection = batchwise_selection
+
+        self.add_module('backbone', timm.create_model(backbone_name, pretrained=True, num_classes=class_num))
         for param in self.backbone.parameters():
             param.requires_grad = False
+        self.backbone.head.requires_grad = True
+        self.prompt = Prompt(pool_size, selection_size, prompt_len, self.backbone.num_features, batchwise_selection = batchwise_selection)
+        self.register_buffer('simmilarity', torch.zeros(1))
+        self.register_buffer('mask', torch.zeros(class_num))
 
-        self.dimention      = self.backbone.embed_dim
+        self.avgpool = nn.AdaptiveAvgPool2d((1, self.backbone.num_features))
 
-        self.prompt         = Prompt(pool_size, selection_size, prompt_len, self.dimention, batchwise_selection)
-        self.simmilairty    = 0.0
-        self.avgpool        = nn.AdaptiveAvgPool2d((1, self.dimention))
-
-        self.past_class     = torch.zeros(class_num)
-
-        self.classifier        = nn.Linear     (self.dimention, class_num)
-        self.classifier.weight = nn.init.zeros_(self.classifier.weight)
-        self.classifier.bias   = nn.init.zeros_(self.classifier.bias)
-
-    def forward(self, inputs : torch.Tensor, **kwargs):
-        self.to(inputs.device)
+    def forward(self, inputs : torch.Tensor, **kwargs) -> torch.Tensor:
+        
         x = self.backbone.patch_embed(inputs)
-        cls_token = self.backbone.cls_token.expand(x.shape[0], -1, -1)
+        B, N, D = x.size()
+
+        cls_token = self.backbone.cls_token.expand(B, -1, -1)
         x = torch.cat((cls_token, x), dim=1)
-
         x = self.backbone.pos_drop(x + self.backbone.pos_embed)
+
         q = self.backbone.blocks(x)
-        q = self.backbone.norm(q)[:, 0, :].clone()
+        q = self.backbone.norm(q)
 
-        _simmilarity, prompts = self.prompt(q)
+        s, p = self.prompt(q[:, 0])
+        self.simmilarity = s.mean()
 
-        prompts = prompts.contiguous().view(x.size()[0], -1, self.dimention)
-        prompts = prompts + self.backbone.pos_embed[:,0,:].expand(prompts.size()[0], prompts.size()[1], -1)
+        p = p.reshape(B, self.selection_size * self.prompt_len, D)
+        p = p + self.backbone.pos_embed[:,0].expand(B, self.selection_size * self.prompt_len, -1)
+        x = torch.cat((p , x), dim=1)
 
-        x = torch.concat([prompts, x], dim = 1)
         x = self.backbone.blocks(x)
         x = self.backbone.norm(x)
-
-        x = x[:, :self.selection_size * self.prompt_len, :].clone()
+        x = x[:, :self.selection_size * self.prompt_len]
         x = self.avgpool(x).squeeze()
-        x = self.classifier(x)
-        
+        x = self.backbone.head(x)
         if self.training:
-            x += + self.past_class.to(x.device)
-        return x
+            x = x + self.mask
+            x = x.softmax(dim=-1)
 
-    def loss_fn(self, output, target, **kwargs):
-        return F.cross_entropy(output, target) - 0.5 * self.simmilairty
+        return x
+    
+    def loss_fn(self, output, target):
+        return F.cross_entropy(output, target) + self.lambd * self.simmilarity
 
     def _convert_train_task(self, task : torch.Tensor, **kwargs):
-        task = task.to(self.past_class.device)
-        self.past_class += -torch.inf
-        self.past_class[task] = 0
-        return self.past_class
+        self.mask += -torch.inf
+        self.mask[task] = 0
+        return self.mask
 
-    def to(self, device : torch.device, **kwargs):
-        for param in self.backbone.parameters():
-            param.to(device)
-        self.prompt = self.prompt.to(device)
-        self.avgpool = self.avgpool.to(device)
-        self.past_class = self.past_class.to(device)
-        self.classifier = self.classifier.to(device)
-        return self
-        
     def train(self: T, mode: bool = True, **kwargs) -> T:
         ten = super().train(mode)
         self.backbone.eval()
         return ten
-        

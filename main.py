@@ -3,15 +3,16 @@ import sys
 import time
 
 from helper.argvs import parse_args
-from utils.trainer import image_trainer
+from utils.trainer import Imgtrainer
 
 os.environ["TORCH_DISTRIBUTED_DEBUG"]="DETAIL"
 
-def main(args):
-    print(args)
-    image_trainer(args)
+def main(kwargs):
+    print(kwargs)
+    trainer = Imgtrainer(**kwargs)
+    trainer.run()
     time.sleep(60)
 
 if __name__ == "__main__":
-    main(parse_args(sys.argv))
+    main(vars(parse_args(sys.argv)))
     print("Done")
