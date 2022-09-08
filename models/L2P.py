@@ -1,4 +1,5 @@
 from dataclasses import astuple
+from tkinter.tix import Tree
 from turtle import forward
 import timm
 import torch
@@ -17,6 +18,7 @@ class L2P(nn.Module):
                  backbone_name  : str   = None,
                  lambd          : float = 0.1,
                  batchwise_selection : bool = False,
+                 _cls_at_front  : bool  = False,
                  **kwargs):
         super().__init__()
         
@@ -30,6 +32,7 @@ class L2P(nn.Module):
         self.lambd = lambd
         self.batchwise_selection = batchwise_selection
         self.class_num = class_num
+        self._cls_at_front = _cls_at_front
 
         self.add_module('backbone', timm.create_model(backbone_name, pretrained=True, num_classes=class_num))
         for param in self.backbone.parameters():
@@ -39,7 +42,8 @@ class L2P(nn.Module):
         self.backbone.head.bias.requires_grad = True
 
         self.prompt = Prompt(pool_size, selection_size, prompt_len, self.backbone.num_features, batchwise_selection = batchwise_selection)
-
+        self.pos_embed = nn.Parameter(torch.tensor(self.backbone.pos_embed, requires_grad=True))
+        
         self.register_buffer('simmilarity', torch.zeros(1))
         self.register_buffer('mask', torch.zeros(class_num))
 
@@ -52,8 +56,8 @@ class L2P(nn.Module):
 
         B, N, D = x.size()
         cls_token = self.backbone.cls_token.expand(B, -1, -1)
-        x = torch.cat((cls_token, x), dim=1)
-        x = self.backbone.pos_drop(x + self.backbone.pos_embed)
+        t = torch.cat((cls_token, x), dim=1)
+        x = self.backbone.pos_drop(t + self.backbone.pos_embed)
 
         q = self.backbone.blocks(x)
         q = self.backbone.norm(q)[:, 0].clone()
@@ -61,9 +65,13 @@ class L2P(nn.Module):
         s, p = self.prompt(q)
         self.simmilarity = s.sum() / B
         p = p.contiguous().view(B, self.selection_size * self.prompt_len, D)
-        p = p + self.backbone.pos_embed[:,0].clone().expand(self.selection_size * self.prompt_len, -1)
-        x = torch.cat((p , x), dim=1)
+        p = p + self.pos_embed[:,0].clone().expand(self.selection_size * self.prompt_len, -1)
 
+        x = self.backbone.pos_drop(t + self.pos_embed)
+        if self._cls_at_front:
+            x = torch.cat((x[:,0].unsqueeze(1), p, x[:,1:]), dim=1)
+        else :
+            x = torch.cat((p, x), dim=1)
         x = self.backbone.blocks(x)
         x = self.backbone.norm(x)
         x = x[:, :self.selection_size * self.prompt_len].clone()
@@ -74,8 +82,7 @@ class L2P(nn.Module):
         return x
     
     def loss_fn(self, output, target):
-        B, C = output.size()
-        #return (- torch.log(F.softmax(output, dim = -1) + 1e-15) * F.one_hot(target, C)).sum() / B + self.lambd * self.simmilarity
+        B, C = output.size() 
         return F.cross_entropy(output, target) - self.lambd * self.simmilarity
 
     def _convert_train_task(self, task : torch.Tensor, **kwargs):

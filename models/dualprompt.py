@@ -135,7 +135,6 @@ class DualPrompt(L2P):
         return x
 
     def _convert_train_task(self, task : torch.Tensor, **kwargs):
-        
         self.task_id += 1
         self.mask += -torch.inf
         self.mask[task] = 0

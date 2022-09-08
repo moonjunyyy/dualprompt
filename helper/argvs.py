@@ -96,7 +96,7 @@ parser.add_argument("--scheduler"    , type=str, help="learning Rate Scheduler t
 
 parser.add_argument("--batch_size"    , type=int, help="batch size of data")
 parser.add_argument("--step_size"     , type=int, help="number of batches for accumulate gradient")
-parser.add_argument("--epochs"       , type=int, help="iteration of dataset for training")
+parser.add_argument("--epochs"        , type=int, help="iteration of dataset for training")
 parser.add_argument("--log_frequency" , type=int, help="number of print for a epoch")
 
 parser.add_argument("--num_tasks"     , type=int, default=1,help="task numbers")
@@ -106,8 +106,8 @@ parser.add_argument("--dataset"       , type=str, help="number of print for a ep
 parser.add_argument("--num_workers"   , type=int, default=2, help="number of workers for data loader")
 parser.add_argument("--num_nodes"     , type=int, default=1, help="total number of nodes to use")
 
-parser.add_argument("--dataset_path" , type=str, default="/home/datasets/", help="path of dataset")
-parser.add_argument("--save_path"    , type=str, default="saved/model/", help="path to save model")
+parser.add_argument("--dataset_path"  , type=str, default="/home/datasets/", help="path of dataset")
+parser.add_argument("--save_path"     , type=str, default="saved/model/", help="path to save model")
 
 parser.add_argument("--dist_url"      , type=str, default="env://", help="distributed training url")
 parser.add_argument("--dist_backend"  , type=str, default="nccl", help="distributed training backend")
@@ -140,6 +140,7 @@ l2p.add_argument("--selection_size", type=int, default=5)
 l2p.add_argument("--prompt_len"    , type=int, default=5)
 l2p.add_argument("--lambda"        , type=float, default=0.5)
 l2p.add_argument("--batchwise_selection" , default=False, action= argparse.BooleanOptionalAction, help="no batchwise selection for")
+l2p.add_argument("--_cls_at_front" ,       default=False, action= argparse.BooleanOptionalAction, help="no batchwise selection for")
 ############################################################################
 #  Optimizer Parser for Each                                               #
 ############################################################################ 
