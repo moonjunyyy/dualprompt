@@ -29,14 +29,14 @@ class Prompt(nn.Module):
 
         match = F.cosine_similarity(query.unsqueeze(1), self.key, dim=-1)
         if self.training:
-            topk = match * F.normalize(1 / self.frequency, p=1, dim=-1)
+            topk = match * F.normalize(self.frequency.reciprocal(), p=1, dim=-1)
         else:
             topk = match
         _ ,topk = topk.topk(self.selection_size, dim=-1, largest=True, sorted=True)
         if self.batchwise_selection:
             idx, counts = topk.unique(sorted=True, return_counts=True)
             _, mosts = counts.topk(self.selection_size, largest=True, sorted=True)
-            topk = idx[mosts].clone().unsqueeze(0).expand(B, -1)
+            topk = idx[mosts].clone().expand(B, -1)
         if self.training:
             self.counter += torch.bincount(topk.contiguous().view(-1), minlength = self.pool_size)
         return match.gather(1, topk).clone(), self.prompts[topk].clone()

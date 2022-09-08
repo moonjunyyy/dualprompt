@@ -29,11 +29,14 @@ class L2P(nn.Module):
         self.selection_size = selection_size
         self.lambd = lambd
         self.batchwise_selection = batchwise_selection
+        self.class_num = class_num
 
         self.add_module('backbone', timm.create_model(backbone_name, pretrained=True, num_classes=class_num))
         for param in self.backbone.parameters():
             param.requires_grad = False
         self.backbone.head.requires_grad = True
+        self.backbone.head.weight.requires_grad = True
+        self.backbone.head.bias.requires_grad = True
 
         self.prompt = Prompt(pool_size, selection_size, prompt_len, self.backbone.num_features, batchwise_selection = batchwise_selection)
 
@@ -56,9 +59,9 @@ class L2P(nn.Module):
         q = self.backbone.norm(q)[:, 0].clone()
 
         s, p = self.prompt(q)
-        self.simmilarity = s.mean()
-        p = p.reshape(B, self.selection_size * self.prompt_len, D)
-        p = p + self.backbone.pos_embed[:,0].expand(self.selection_size * self.prompt_len, -1)
+        self.simmilarity = s.sum() / B
+        p = p.contiguous().view(B, self.selection_size * self.prompt_len, D)
+        p = p + self.backbone.pos_embed[:,0].clone().expand(self.selection_size * self.prompt_len, -1)
         x = torch.cat((p , x), dim=1)
 
         x = self.backbone.blocks(x)
@@ -66,16 +69,18 @@ class L2P(nn.Module):
         x = x[:, :self.selection_size * self.prompt_len].clone()
         x = self.avgpool(x).squeeze()
         x = self.backbone.head(x)
-
+        if self.training:
+            x = x + self.mask
         return x
     
     def loss_fn(self, output, target):
         B, C = output.size()
-        return - (torch.log(F.softmax(output, dim = -1) + 1e-15) * F.one_hot(target, C)).sum(-1).mean() + self.lambd * self.simmilarity
+        #return (- torch.log(F.softmax(output, dim = -1) + 1e-15) * F.one_hot(target, C)).sum() / B + self.lambd * self.simmilarity
+        return F.cross_entropy(output, target) - self.lambd * self.simmilarity
 
     def _convert_train_task(self, task : torch.Tensor, **kwargs):
         self.mask += -torch.inf
-        self.mask[task] = 0
+        self.mask[task.to(self.mask.device)] = 0
         return self.prompt.update()
 
     def train(self: T, mode: bool = True, **kwargs) -> T:

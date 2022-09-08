@@ -144,7 +144,6 @@ class Imgtrainer():
             model_without_ddp = model.module
         criterion = model_without_ddp.loss_fn if self.criterion == 'custom' else self.criterion()
         optimizer = self.optimizer(model.parameters(), **self.optimizer_args)
-        initial_optim = optimizer.state_dict()
         scheduler = self.scheduler(optimizer, **self.scheduler_args)
 
         if not self.training:
@@ -166,7 +165,7 @@ class Imgtrainer():
                 loader_val = self.set_task(self.dataset_val, sampler_val, test) 
                 self.validate(loader_val, model, criterion)
             self.epoch = 0
-            optimizer.load_state_dict(initial_optim)
+            optimizer = self.optimizer(model.parameters(), **self.optimizer_args)
             print('')
 
     def train(self, loader, model, criterion, optimizer):
