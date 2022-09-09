@@ -16,10 +16,13 @@ class L2P(nn.Module):
                  prompt_len     : int   = 5,
                  class_num      : int   = 100,
                  backbone_name  : str   = None,
-                 lambd          : float = 0.1,
-                 batchwise_selection : bool = False,
+                 lambd          : float = 0.5,
                  _cls_at_front  : bool  = False,
+                 _batchwise_selection : bool = True,
+                 _mixed_prompt_order   : bool  = False,
+                 _mixed_prompt_token   : bool  = False,
                  **kwargs):
+
         super().__init__()
         
         if backbone_name is None:
@@ -30,7 +33,7 @@ class L2P(nn.Module):
         self.prompt_len = prompt_len
         self.selection_size = selection_size
         self.lambd = lambd
-        self.batchwise_selection = batchwise_selection
+        self._batchwise_selection = _batchwise_selection
         self.class_num = class_num
         self._cls_at_front = _cls_at_front
 
@@ -41,15 +44,19 @@ class L2P(nn.Module):
         self.backbone.head.weight.requires_grad = True
         self.backbone.head.bias.requires_grad = True
 
-        self.prompt = Prompt(pool_size, selection_size, prompt_len, self.backbone.num_features, batchwise_selection = batchwise_selection)
-        self.pos_embed = nn.Parameter(torch.tensor(self.backbone.pos_embed, requires_grad=True))
+        self.prompt = Prompt(
+            pool_size,
+            selection_size,
+            prompt_len,
+            self.backbone.num_features,
+            _batchwise_selection = _batchwise_selection,
+            _mixed_prompt_order = _mixed_prompt_order,
+            _mixed_prompt_token = _mixed_prompt_token)
+        self.pos_embed = nn.Parameter(self.backbone.pos_embed.clone().detach().requires_grad_(True))
         
         self.register_buffer('simmilarity', torch.zeros(1))
         self.register_buffer('mask', torch.zeros(class_num))
-
-        self.avgpool = nn.AdaptiveAvgPool2d((1, self.backbone.num_features))
         
-
     def forward(self, inputs : torch.Tensor, **kwargs) -> torch.Tensor:
         
         x = self.backbone.patch_embed(inputs)
@@ -74,8 +81,11 @@ class L2P(nn.Module):
             x = torch.cat((p, x), dim=1)
         x = self.backbone.blocks(x)
         x = self.backbone.norm(x)
-        x = x[:, :self.selection_size * self.prompt_len].clone()
-        x = self.avgpool(x).squeeze()
+        if self._cls_at_front:
+            x = x[:, 1:self.selection_size * self.prompt_len + 1].clone()
+        else :
+            x = x[:, :self.selection_size * self.prompt_len].clone()
+        x = x.mean(dim=1)
         x = self.backbone.head(x)
         if self.training:
             x = x + self.mask

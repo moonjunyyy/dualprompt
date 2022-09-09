@@ -105,12 +105,15 @@ parser.add_argument("--task_governor" , type=str, default=None, help="setting of
 parser.add_argument("--dataset"       , type=str, help="number of print for a epoch")
 parser.add_argument("--num_workers"   , type=int, default=2, help="number of workers for data loader")
 parser.add_argument("--num_nodes"     , type=int, default=1, help="total number of nodes to use")
+parser.add_argument("--node_id"       , type=int, default=0, help="id of node using")
 
 parser.add_argument("--dataset_path"  , type=str, default="/home/datasets/", help="path of dataset")
 parser.add_argument("--save_path"     , type=str, default="saved/model/", help="path to save model")
 
-parser.add_argument("--dist_url"      , type=str, default="env://", help="distributed training url")
-parser.add_argument("--dist_backend"  , type=str, default="nccl", help="distributed training backend")
+parser.add_argument("--dist_url"         , type=str, default="env://",    help="distributed training url")
+parser.add_argument("--dist_backend"     , type=str, default="nccl",      help="distributed training backend")
+parser.add_argument("--dist_master_addr" , type=str, default="127.0.0.1", help="distributed training address")
+parser.add_argument("--dist_master_port" , type=str, default="12355",     help="distributed training port")
 
 parser.add_argument("--seed"    , type=int, default=None, help="manually set random seed")
 parser.add_argument("--device"  , type=str, default='cuda', help="device to use for training/testing")
@@ -139,8 +142,11 @@ l2p.add_argument("--pool_size"     , type=int, default=10)
 l2p.add_argument("--selection_size", type=int, default=5)
 l2p.add_argument("--prompt_len"    , type=int, default=5)
 l2p.add_argument("--lambda"        , type=float, default=0.5)
-l2p.add_argument("--batchwise_selection" , default=False, action= argparse.BooleanOptionalAction, help="no batchwise selection for")
-l2p.add_argument("--_cls_at_front" ,       default=False, action= argparse.BooleanOptionalAction, help="no batchwise selection for")
+l2p.add_argument("--_cls_at_front" ,       default=False, action= argparse.BooleanOptionalAction, help="set class token at front of prompt")
+l2p.add_argument("--_batchwise_selection", default=True,  action= argparse.BooleanOptionalAction, help="batchwise selection for")
+l2p.add_argument("--_mixed_prompt_order",  default=False, action= argparse.BooleanOptionalAction, help="randomize the order of prompt")
+l2p.add_argument("--_mixed_prompt_token",  default=False, action= argparse.BooleanOptionalAction, help="randomize the order of prompt")
+
 ############################################################################
 #  Optimizer Parser for Each                                               #
 ############################################################################ 

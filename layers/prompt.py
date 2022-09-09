@@ -4,14 +4,24 @@ import torch.nn.functional as F
 
 
 class Prompt(nn.Module):
-    def __init__(self, pool_size : int, selection_size : int, prompt_len : int, dimention : int, batchwise_selection : bool = True, **kwargs) -> None:
+    def __init__(self,
+                 pool_size            : int,
+                 selection_size       : int,
+                 prompt_len           : int,
+                 dimention            : int,
+                 _batchwise_selection : bool = True,
+                 _mixed_prompt_order  : bool = False,
+                 _mixed_prompt_token  : bool = False,
+                 **kwargs) -> None:
         super().__init__()
 
         self.pool_size      = pool_size
         self.selection_size = selection_size
         self.prompt_len     = prompt_len
         self.dimention      = dimention
-        self.batchwise_selection = batchwise_selection
+        self._batchwise_selection = _batchwise_selection
+        self._mixed_prompt_order  = _mixed_prompt_order
+        self._mixed_prompt_token  = _mixed_prompt_token
 
         self.key     = nn.Parameter(torch.randn(pool_size, dimention, requires_grad= True))
         self.prompts = nn.Parameter(torch.randn(pool_size, prompt_len, dimention, requires_grad= True))
@@ -27,19 +37,36 @@ class Prompt(nn.Module):
         B, D = query.shape
         assert D == self.dimention, f'Query dimention {D} does not match prompt dimention {self.dimention}'
 
+        # Select prompts
         match = F.cosine_similarity(query.unsqueeze(1), self.key, dim=-1)
         if self.training:
             topk = match * F.normalize(self.frequency.reciprocal(), p=1, dim=-1)
         else:
             topk = match
         _ ,topk = topk.topk(self.selection_size, dim=-1, largest=True, sorted=True)
-        if self.batchwise_selection:
+
+        # Batch-wise prompt selection
+        if self._batchwise_selection:
             idx, counts = topk.unique(sorted=True, return_counts=True)
-            _, mosts = counts.topk(self.selection_size, largest=True, sorted=True)
+            _,   mosts  = counts.topk(self.selection_size, largest=True, sorted=True)
             topk = idx[mosts].clone().expand(B, -1)
+
+        selection = self.prompts[topk]
+        match     = match[topk].clone()
+
+        # Mixed order prompt selection
+        if self._mixed_prompt_order and self._mixed_prompt_token:
+            selection = selection.reshape(B, -1, D)
+            selection = selection[:, torch.randperm(self.selection_size * self.prompt_len)].clone()
+            selection = selection.reshape(B, self.selection_size, self.prompt_len, D)
+        elif self._mixed_prompt_order:
+            selection = selection[:, torch.randperm(self.selection_size)].clone()
+        elif self._mixed_prompt_order:
+            selection = selection[:, :,torch.randperm(self.prompt_len)].clone()
+
         if self.training:
             self.counter += torch.bincount(topk.contiguous().view(-1), minlength = self.pool_size)
-        return match.gather(1, topk).clone(), self.prompts[topk].clone()
+        return match, selection
     
     def update(self):
         self.frequency += self.counter

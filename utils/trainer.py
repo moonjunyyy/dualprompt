@@ -33,34 +33,34 @@ class Imgtrainer():
                  task_governor, num_tasks,
                  dataset, num_workers, dataset_path, save_path,
                  seed, device, pin_mem, use_amp, debug,
-                 num_nodes, dist_url, dist_backend,
+                 num_nodes, node_id, dist_url, dist_backend, dist_master_addr, dist_master_port,
                  *args, **kwargs) -> None:
         
-        self.model = model
+        self.model      = model
         self.model_args = model_args
-        self.criterion = criterion
-        self.optimizer = optimizer
+        self.criterion  = criterion
+        self.optimizer  = optimizer
         self.optimizer_args = optimizer_args
-        self.scheduler = scheduler
+        self.scheduler  = scheduler
         self.scheduler_args = scheduler_args
 
-        self.batch_size = batch_size
-        self.step_size = int(step_size // batch_size)
-        self.epoch = 0
+        self.epoch  = 0
         self.epochs = epochs
-        self.log_frequency = log_frequency
-        self.task_governor = task_governor
+        self.batch_size = batch_size
+        self.step_size  = int(step_size // batch_size)
+        self.log_frequency  = log_frequency
+        self.task_governor  = task_governor
 
-        self.training = True
-        self.num_tasks = num_tasks
-        self.num_workers = num_workers
-        self.dataset_path = dataset_path
-        self.save_path = save_path
-        self.seed = seed
+        self.training   = True
+        self.num_tasks  = num_tasks
+        self.num_workers    = num_workers
+        self.dataset_path   = dataset_path
+        self.save_path  = save_path
+        self.pin_mem    = pin_mem
+        self.use_amp    = use_amp
+        self.seed   = seed
         self.device = device
-        self.pin_mem = pin_mem
-        self.use_amp = use_amp
-        self.debug = debug
+        self.debug  = debug
         
         # Transform needs to be diversed and be selected by user
         transform = transforms.Compose([transforms.Resize(224),
@@ -75,6 +75,9 @@ class Imgtrainer():
         self.num_nodes = num_nodes
         self.dist_url = dist_url
         self.dist_backend = dist_backend
+        self.dist_master_addr = dist_master_addr
+        self.dist_master_port = dist_master_port
+
         pass
 
     def run(self):
@@ -100,8 +103,8 @@ class Imgtrainer():
 
     def main_worker(self, rank, ngpus_per_node, world_size):
         if self.distributed:
-            os.environ['MASTER_ADDR'] = '127.0.0.1'
-            os.environ['MASTER_PORT'] = '12355'
+            os.environ['MASTER_ADDR'] = self.dist_master_addr
+            os.environ['MASTER_PORT'] = self.dist_master_port
             print('| distributed init (rank {}): {}'.format(rank, self.device))
             dist.init_process_group(backend=self.dist_backend,
                                     init_method=self.dist_url,
@@ -147,13 +150,13 @@ class Imgtrainer():
         scheduler = self.scheduler(optimizer, **self.scheduler_args)
 
         if not self.training:
-                self.validate(self.dataset_val, sampler_val, test) 
+                self.validate(self.dataset_val, sampler_val, test)
                 return
 
         for task in range(self.num_tasks):
             loader_train = self.set_task(self.dataset_train, sampler_train, task)
-            print(model_without_ddp._convert_train_task(sampler_train.get_task()))
-            print(f"Training for task {task} : {sampler_train.get_task()}")
+            print("Selection : ",(model_without_ddp._convert_train_task(sampler_train.get_task()).to(torch.int) - 1).tolist())
+            print(f"Training for task {task} : {sampler_train.get_task().tolist()}")
 
             for self.epoch in range(self.epochs):
                 sampler_train.set_epoch(self.epoch)
@@ -167,6 +170,7 @@ class Imgtrainer():
             self.epoch = 0
             optimizer = self.optimizer(model.parameters(), **self.optimizer_args)
             print('')
+        print("Selection : ",(model_without_ddp._convert_train_task(sampler_train.get_task())-1).tolist())
 
     def train(self, loader, model, criterion, optimizer):
         batch_time = AverageMeter('Time', ':6.3f')
