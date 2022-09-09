@@ -73,7 +73,6 @@ class DualPrompt(L2P):
         B, _, D = x.size()
         g_prompt = g_prompt.view(B, 2 * self.g_length, self.len_g_prompt, D)
         e_prompt = e_prompt.view(B, 2 * self.e_length, self.len_e_prompt, D)
-        
         for n, block in enumerate(self.backbone.blocks):
             r  = x
             xq = block.norm1(x)
@@ -114,9 +113,8 @@ class DualPrompt(L2P):
         x = self.backbone.norm(x)
         return x
 
-    def forward(self, input : torch.Tensor) :
-
-        x = self.backbone.patch_embed(input)
+    def forward(self, inputs : torch.Tensor) :
+        x = self.backbone.patch_embed(inputs)
         B, N, D = x.size()
 
         cls_token = self.backbone.cls_token.expand(B, -1, -1)

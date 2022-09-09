@@ -58,7 +58,6 @@ class L2P(nn.Module):
         self.register_buffer('mask', torch.zeros(class_num))
         
     def forward(self, inputs : torch.Tensor, **kwargs) -> torch.Tensor:
-        
         x = self.backbone.patch_embed(inputs)
 
         B, N, D = x.size()

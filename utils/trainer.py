@@ -8,6 +8,7 @@ import torch.distributed as dist
 import torch.multiprocessing as mp
 import torchvision.transforms as transforms
 from helper.metric import AverageMeter, ProgressMeter, Summary, accuracy
+import builtins
 from torch.utils.data import DataLoader, Subset
 
 from utils.sampler import CILSampler
@@ -33,7 +34,7 @@ class Imgtrainer():
                  task_governor, num_tasks,
                  dataset, num_workers, dataset_path, save_path,
                  seed, device, pin_mem, use_amp, debug,
-                 num_nodes, node_id, dist_url, dist_backend, dist_master_addr, dist_master_port,
+                 world_size, dist_url, dist_backend, rank, local_rank,
                  *args, **kwargs) -> None:
         
         self.model      = model
@@ -61,66 +62,42 @@ class Imgtrainer():
         self.seed   = seed
         self.device = device
         self.debug  = debug
-        
+
+        self.rank   = rank
+        self.dist_backend = dist_backend
+        self.dist_url     = dist_url
+        self.local_rank   = local_rank
+        self.world_size   = world_size
+        self.ngpus_per_nodes = torch.cuda.device_count()
+
         # Transform needs to be diversed and be selected by user
         transform = transforms.Compose([transforms.Resize(224),
                                         transforms.ToTensor ()])
         self.dataset_train  = dataset(dataset_path, download=True, train=True,  transform=transform)
         self.dataset_val    = dataset(dataset_path, download=True, train=False, transform=transform)
 
-        self.distributed = num_nodes > 1 or torch.cuda.device_count() > 1
-        self.world_size = num_nodes * torch.cuda.device_count()
-        self.ngpus_per_node = torch.cuda.device_count()
-
-        self.num_nodes = num_nodes
-        self.dist_url = dist_url
-        self.dist_backend = dist_backend
-        self.dist_master_addr = dist_master_addr
-        self.dist_master_port = dist_master_port
-
-        pass
-
     def run(self):
+        if "WORLD_SIZE" in os.environ:
+            self.world_size = int(os.environ["WORLD_SIZE"])
+        self.distributed = self.world_size > 1
+        
         if self.distributed:
-            print("Initializing Distributed Process Group")
-            mp.spawn(self.main_worker,
-                     nprocs=self.ngpus_per_node,
-                     args=(self.ngpus_per_node,
-                     self.world_size))
-        else:
-            print("Initializing Single Process")
-            self.main_worker(0, 1, 1)
-        pass
-    
-    def set_task(self, dataset, sampler, task):
-        sampler.set_task(task)
-        loader = DataLoader(dataset,
-                            batch_size=self.batch_size,
-                            sampler=sampler,
-                            num_workers=self.num_workers,
-                            pin_memory=self.pin_mem)  
-        return loader
-
-    def main_worker(self, rank, ngpus_per_node, world_size):
-        if self.distributed:
-            os.environ['MASTER_ADDR'] = self.dist_master_addr
-            os.environ['MASTER_PORT'] = self.dist_master_port
-            print('| distributed init (rank {}): {}'.format(rank, self.device))
-            dist.init_process_group(backend=self.dist_backend,
-                                    init_method=self.dist_url,
-                                    world_size=world_size,
-                                    rank=rank)
-            torch.cuda.set_device(rank)
-            self.device = torch.device(rank)
-            # Print is available only for the master process
+            if self.local_rank != -1: # for torch.distributed.launch
+                self.rank = self.local_rank
+                self.gpu  = self.local_rank
+            elif 'SLURM_PROCID' in os.environ: # for slurm scheduler
+                self.rank = int(os.environ['SLURM_PROCID'])
+                self.gpu = self.rank % torch.cuda.device_count()
+            print(f"| Init Process group {self.rank} : {self.local_rank}")    
+            dist.init_process_group(backend=self.dist_backend, init_method=self.dist_url,
+                                    world_size=self.world_size, rank=self.rank)
             self.setup_for_distributed(self.is_main_process())
             dist.barrier()
         else:
-            self.device = torch.device('cuda') if torch.cuda.is_available() else torch.device('cpu')
-            print(f"Work on {self.device}")
+            pass
 
         if self.seed is not None:
-            seed = self.seed + rank
+            seed = self.seed + self.rank
             random.seed(seed)
             torch.manual_seed(seed)
             cudnn.deterministic = True
@@ -139,11 +116,11 @@ class Imgtrainer():
         self.batch_size = int(self.batch_size // self.world_size)
 
         model = self.model(**self.model_args)
-        model.cuda(rank)
+        model.cuda(self.gpu)
+        self.device = torch.device(self.gpu)
         model_without_ddp = model
-
         if self.distributed:
-            model = torch.nn.parallel.DistributedDataParallel(model)
+            model = torch.nn.parallel.DistributedDataParallel(model, find_unused_parameters=True)
             model_without_ddp = model.module
         criterion = model_without_ddp.loss_fn if self.criterion == 'custom' else self.criterion()
         optimizer = self.optimizer(model.parameters(), **self.optimizer_args)
@@ -171,6 +148,15 @@ class Imgtrainer():
             optimizer = self.optimizer(model.parameters(), **self.optimizer_args)
             print('')
         print("Selection : ",(model_without_ddp._convert_train_task(sampler_train.get_task())-1).tolist())
+    
+    def set_task(self, dataset, sampler, task):
+        sampler.set_task(task)
+        loader = DataLoader(dataset,
+                            batch_size=self.batch_size,
+                            sampler=sampler,
+                            num_workers=self.num_workers,
+                            pin_memory=self.pin_mem)  
+        return loader
 
     def train(self, loader, model, criterion, optimizer):
         batch_time = AverageMeter('Time', ':6.3f')
@@ -214,38 +200,35 @@ class Imgtrainer():
                 progress.display(i + 1)
                 
     def validate(self, loader, model, criterion):
-        def run_validate(loader, base_progress=0):
-            with torch.no_grad():
-                end = time.time()
-                for i, (images, target) in enumerate(loader):
-                    images, target = images.to(self.device), target.to(self.device)
-                    # compute output
-                    output = model(images)
-                    loss = criterion(output, target)
-
-                    # measure accuracy and record loss
-                    acc1, acc5 = accuracy(output, target, topk=(1, 5))
-                    losses.update(loss.item(), images.size(0))
-                    top1.update(acc1[0], images.size(0))
-                    top5.update(acc5[0], images.size(0))
-
-                    # measure elapsed time
-                    batch_time.update(time.time() - end)
-                    end = time.time()
-
         batch_time = AverageMeter('Time', ':6.3f', Summary.NONE)
         losses = AverageMeter('Loss', ':.4e', Summary.NONE)
         top1 = AverageMeter('Acc@1', ':6.2f', Summary.AVERAGE)
         top5 = AverageMeter('Acc@5', ':6.2f', Summary.AVERAGE)
         progress = ProgressMeter(
-            len(loader) + (self.distributed and (len(loader) * self.world_size < len(loader))),
+            len(loader),
             [batch_time, losses, top1, top5],
             prefix='Test: ')
 
         # switch to evaluate mode
         model.eval()
-        run_validate(loader)
-        torch.cuda.synchronize()
+        with torch.no_grad():
+            end = time.time()
+            for i, (images, target) in enumerate(loader):
+                images, target = images.to(self.device), target.to(self.device)
+                # compute output
+                output = model(images)
+                loss = criterion(output, target)
+
+                # measure accuracy and record loss
+                acc1, acc5 = accuracy(output, target, topk=(1, 5))
+                losses.update(loss.item(), images.size(0))
+                top1.update(acc1[0], images.size(0))
+                top5.update(acc5[0], images.size(0))
+
+                # measure elapsed time
+                batch_time.update(time.time() - end)
+                end = time.time()
+        #torch.cuda.synchronize()
         if self.distributed:
             top1.all_reduce()
             top5.all_reduce()

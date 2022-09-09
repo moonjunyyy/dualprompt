@@ -102,24 +102,23 @@ parser.add_argument("--log_frequency" , type=int, help="number of print for a ep
 parser.add_argument("--num_tasks"     , type=int, default=1,help="task numbers")
 parser.add_argument("--task_governor" , type=str, default=None, help="setting of continual learning for multiple task")
 
+parser.add_argument("--num_workers"   , type=int, default=2,help="task workers")
 parser.add_argument("--dataset"       , type=str, help="number of print for a epoch")
-parser.add_argument("--num_workers"   , type=int, default=2, help="number of workers for data loader")
-parser.add_argument("--num_nodes"     , type=int, default=1, help="total number of nodes to use")
-parser.add_argument("--node_id"       , type=int, default=0, help="id of node using")
-
 parser.add_argument("--dataset_path"  , type=str, default="/home/datasets/", help="path of dataset")
 parser.add_argument("--save_path"     , type=str, default="saved/model/", help="path to save model")
-
-parser.add_argument("--dist_url"         , type=str, default="env://",    help="distributed training url")
-parser.add_argument("--dist_backend"     , type=str, default="nccl",      help="distributed training backend")
-parser.add_argument("--dist_master_addr" , type=str, default="127.0.0.1", help="distributed training address")
-parser.add_argument("--dist_master_port" , type=str, default="12355",     help="distributed training port")
 
 parser.add_argument("--seed"    , type=int, default=None, help="manually set random seed")
 parser.add_argument("--device"  , type=str, default='cuda', help="device to use for training/testing")
 parser.add_argument("--pin_mem" , default=False, action= argparse.BooleanOptionalAction, help="use pin memory for data loader")
 parser.add_argument("--use_amp" , default=False, action= argparse.BooleanOptionalAction, help="use amp for fp16")
 parser.add_argument("--debug"   , default=False, action= argparse.BooleanOptionalAction, help="in debug mode, program will shows more information")
+
+# DDP configs:
+parser.add_argument('--world-size',   default=-1, type=int, help='number of nodes for distributed training')
+parser.add_argument('--rank',         default=-1, type=int, help='node rank for distributed training')
+parser.add_argument('--dist-url',     default='env://', type=str, help='url used to set up distributed training')
+parser.add_argument('--dist-backend', default='nccl', type=str, help='distributed backend')
+parser.add_argument('--local_rank',   default=-1, type=int, help='local rank for distributed training')
 
 ############################################################################
 #  Model Parser for Each Model                                             #
