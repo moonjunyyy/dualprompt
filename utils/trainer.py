@@ -48,8 +48,9 @@ class Imgtrainer():
         self.step_size     = int(step_size // batch_size)
         self.log_frequency = log_frequency
         self.task_governor = task_governor
-
+        
         self.training     = True
+        self.lock         = mp.Lock()
         self.num_tasks    = num_tasks
         self.num_workers  = num_workers
         self.dataset_path = dataset_path
@@ -103,9 +104,10 @@ class Imgtrainer():
             self.local_rank = self.rank
             self.rank = int(os.environ['SLURM_PROCID']) * self.ngpus_per_nodes + gpu
             print(f"| Init Process group {os.environ['SLURM_PROCID']} : {self.local_rank}")
-
+            self.lock.acquire()
             dist.init_process_group(backend=self.dist_backend, init_method=self.dist_url,
                                     world_size=self.world_size, rank=self.rank)
+            self.lock.release()
             dist.barrier()
             self.setup_for_distributed(self.is_main_process())
         else:
@@ -156,7 +158,7 @@ class Imgtrainer():
             for test in range(task + 1):
                 loader_val = self.set_task(self.dataset_val, sampler_val, test) 
                 self.validate(loader_val, model, criterion)
-                
+
             self.epoch = 0
             optimizer = self.optimizer(model.parameters(), **self.optimizer_args)
             print('')
