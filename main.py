@@ -1,6 +1,7 @@
 import os
 import sys
 import time
+import multiprocessing as mp
 
 from helper.argvs import parse_args
 from utils.trainer import Imgtrainer
@@ -29,6 +30,7 @@ default_cfgs['vit_base_patch16_224_l2p'] = _cfg(
 
 def main(kwargs):
     print(kwargs)
+    mp.set_start_method('spawn')
     trainer = Imgtrainer(**kwargs)
     trainer.run()
     time.sleep(60)

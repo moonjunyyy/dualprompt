@@ -81,7 +81,7 @@ class Imgtrainer():
         self.dataset_val     = dataset(dataset_path, download=True, train=False, transform=transform)
 
     def run(self):
-        if self.distributed:
+        if self.distributed: 
             processes = []
             for n in range(self.ngpus_per_nodes):
                 print(f"start process {n}...")
@@ -101,14 +101,11 @@ class Imgtrainer():
         self.device = torch.device(self.gpu)
         if self.distributed:
             #os.environ['MASTER_PORT'] = str(int(os.environ['MASTER_PORT']) + self.rank * self.ngpus_per_nodes + gpu)
-            self.local_rank = self.rank
+            self.local_rank = gpu
             self.rank = int(os.environ['SLURM_PROCID']) * self.ngpus_per_nodes + gpu
             print(f"| Init Process group {os.environ['SLURM_PROCID']} : {self.local_rank}")
-            self.lock.acquire()
             dist.init_process_group(backend=self.dist_backend, init_method=self.dist_url,
-                                    world_size=self.world_size, rank=self.rank)
-            self.lock.release()
-            dist.barrier()
+                                    world_size=self.world_size, rank=self.local_rank)
             self.setup_for_distributed(self.is_main_process())
         else:
             pass
@@ -130,13 +127,15 @@ class Imgtrainer():
         sampler_train = CILSampler(self.dataset_train, self.num_tasks, _w, _r, shuffle=True, seed=self.seed)
         sampler_val   = CILSampler(self.dataset_val  , self.num_tasks, _w, _r, shuffle=False, seed=self.seed)
         self.batch_size = int(self.batch_size // self.world_size)
-
+        
+        print("Building model...")
         model = self.model(**self.model_args)
         model.to(self.device)
         model_without_ddp = model
         if self.distributed:
             model = torch.nn.parallel.DistributedDataParallel(model, find_unused_parameters=True)
-            model_without_ddp = model.module
+        model._set_static_graph()
+        model_without_ddp = model.module
         criterion = model_without_ddp.loss_fn if self.criterion == 'custom' else self.criterion()
         optimizer = self.optimizer(model.parameters(), **self.optimizer_args)
         scheduler = self.scheduler(optimizer, **self.scheduler_args)

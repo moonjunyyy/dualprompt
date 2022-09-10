@@ -25,7 +25,7 @@ class Prompt(nn.Module):
 
         self.key     = nn.Parameter(torch.randn(pool_size, dimention, requires_grad= True))
         self.prompts = nn.Parameter(torch.randn(pool_size, prompt_len, dimention, requires_grad= True))
-
+        
         torch.nn.init.uniform_(self.key,     -1, 1)
         torch.nn.init.uniform_(self.prompts, -1, 1)
 
@@ -51,8 +51,8 @@ class Prompt(nn.Module):
             _,   mosts  = counts.topk(self.selection_size, largest=True, sorted=True)
             topk = idx[mosts].clone().expand(B, -1)
 
-        selection = self.prompts[topk]
-        match     = match[topk].clone()
+        selection   = self.prompts[topk]
+        simmilarity = match.gather(1, topk)
 
         # Mixed order prompt selection
         if self._mixed_prompt_order and self._mixed_prompt_token:
@@ -66,7 +66,7 @@ class Prompt(nn.Module):
 
         if self.training:
             self.counter += torch.bincount(topk.contiguous().view(-1), minlength = self.pool_size)
-        return match, selection
+        return simmilarity, selection
     
     def update(self):
         self.frequency += self.counter
