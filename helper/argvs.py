@@ -114,11 +114,11 @@ parser.add_argument("--use_amp" , default=False, action= argparse.BooleanOptiona
 parser.add_argument("--debug"   , default=False, action= argparse.BooleanOptionalAction, help="in debug mode, program will shows more information")
 
 # DDP configs:
-parser.add_argument('--world-size',   default=-1, type=int, help='number of nodes for distributed training')
-parser.add_argument('--rank',         default=-1, type=int, help='node rank for distributed training')
+parser.add_argument('--world-size',   default=1, type=int, help='number of nodes for distributed training')
+parser.add_argument('--rank',         default=0, type=int, help='node rank for distributed training')
 parser.add_argument('--dist-url',     default='env://', type=str, help='url used to set up distributed training')
 parser.add_argument('--dist-backend', default='nccl', type=str, help='distributed backend')
-parser.add_argument('--local_rank',   default=-1, type=int, help='local rank for distributed training')
+parser.add_argument('--local_rank',   default=0, type=int, help='local rank for distributed training')
 
 ############################################################################
 #  Model Parser for Each Model                                             #
