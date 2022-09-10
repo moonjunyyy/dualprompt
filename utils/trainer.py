@@ -68,7 +68,12 @@ class Imgtrainer():
         self.dist_url     = dist_url
         self.local_rank   = local_rank
         self.world_size   = world_size
+        if "WORLD_SIZE" in os.environ:
+            self.world_size = int(os.environ["WORLD_SIZE"])
+        else:
+            self.world_size   = self.world_size * self.ngpus_per_nodes
         self.ngpus_per_nodes = torch.cuda.device_count()
+        self.distributed = self.world_size > 1
 
         # Transform needs to be diversed and be selected by user
         transform = transforms.Compose([transforms.Resize(224),
@@ -77,17 +82,25 @@ class Imgtrainer():
         self.dataset_val    = dataset(dataset_path, download=True, train=False, transform=transform)
 
     def run(self):
-        if "WORLD_SIZE" in os.environ:
-            self.world_size = int(os.environ["WORLD_SIZE"])
-        self.distributed = self.world_size > 1
         
+        processes = []
+        for n in range(self.ngpus_per_nodes):
+            print(f"start process {n}...")
+            p = mp.Process(target=self.main_worker, args=(n,))
+            p.start()
+            processes.append(p)
+
+        for p in processes:
+            p.join()
+        
+        return
+    
+    def main_worker(self, gpu):
         if self.distributed:
-            if self.local_rank != -1: # for torch.distributed.launch
-                self.rank = self.local_rank
-                self.gpu  = self.local_rank
-            elif 'SLURM_PROCID' in os.environ: # for slurm scheduler
-                self.rank = int(os.environ['SLURM_PROCID'])
-                self.gpu = self.rank % torch.cuda.device_count()
+            self.rank = int(os.environ['SLURM_PROCID']) * self.ngpus_per_nodes + gpu
+            self.gpu = gpu % self.ngpus_per_nodes
+            #os.environ['MASTER_PORT'] = str(int(os.environ['MASTER_PORT']) + self.rank * self.ngpus_per_nodes + gpu)
+            self.local_rank = self.rank * self.ngpus_per_nodes + gpu
             print(f"| Init Process group {self.rank} : {self.local_rank}")    
             dist.init_process_group(backend=self.dist_backend, init_method=self.dist_url,
                                     world_size=self.world_size, rank=self.rank)
