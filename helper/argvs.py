@@ -7,6 +7,8 @@ from torchvision.datasets import CIFAR10, CIFAR100, MNIST, FashionMNIST
 
 from models.dualprompt import DualPrompt
 from models.L2P import L2P
+from models.EL2P import EL2P
+from models.CertL2P import CertL2P
 
 #Functions to parse arguments
 
@@ -15,6 +17,10 @@ def model_parser(model_name : str, args : list):
         return DualPrompt, vars(dualprompt.parse_known_args(args)[0])
     elif model_name == "l2p":
         return L2P, vars(l2p.parse_known_args(args)[0])
+    elif model_name == "el2p":
+        return L2P, vars(el2p.parse_known_args(args)[0])
+    elif model_name == "certl2p":
+        return CertL2P, vars(certl2p.parse_known_args(args)[0])
     else:
         raise ValueError("unknown model name {}".format(model_name)[0])
 
@@ -94,23 +100,23 @@ parser.add_argument("--criterion"    , type=str, help="loss function to use for 
 parser.add_argument("--optimizer"    , type=str, help="optimizer to use for training")
 parser.add_argument("--scheduler"    , type=str, help="learning Rate Scheduler to use for training")
 
-parser.add_argument("--batch_size"    , type=int, help="batch size of data")
-parser.add_argument("--step_size"     , type=int, help="number of batches for accumulate gradient")
+parser.add_argument("--batch-size"    , type=int, help="batch size of data")
+parser.add_argument("--step-size"     , type=int, help="number of batches for accumulate gradient")
 parser.add_argument("--epochs"        , type=int, help="iteration of dataset for training")
-parser.add_argument("--log_frequency" , type=int, help="number of print for a epoch")
+parser.add_argument("--log-frequency" , type=int, help="number of print for a epoch")
 
-parser.add_argument("--num_tasks"     , type=int, default=1,help="task numbers")
-parser.add_argument("--task_governor" , type=str, default=None, help="setting of continual learning for multiple task")
+parser.add_argument("--num-tasks"     , type=int, default=1,help="task numbers")
+parser.add_argument("--task-governor" , type=str, default=None, help="setting of continual learning for multiple task")
 
-parser.add_argument("--num_workers"   , type=int, default=2,help="task workers")
+parser.add_argument("--num-workers"   , type=int, default=2,help="task workers")
 parser.add_argument("--dataset"       , type=str, help="number of print for a epoch")
-parser.add_argument("--dataset_path"  , type=str, default="/home/datasets/", help="path of dataset")
-parser.add_argument("--save_path"     , type=str, default="saved/model/", help="path to save model")
+parser.add_argument("--dataset-path"  , type=str, default="/home/datasets/", help="path of dataset")
+parser.add_argument("--save-path"     , type=str, default="saved/model/", help="path to save model")
 
 parser.add_argument("--seed"    , type=int, default=None, help="manually set random seed")
 parser.add_argument("--device"  , type=str, default='cuda', help="device to use for training/testing")
-parser.add_argument("--pin_mem" , default=False, action= argparse.BooleanOptionalAction, help="use pin memory for data loader")
-parser.add_argument("--use_amp" , default=False, action= argparse.BooleanOptionalAction, help="use amp for fp16")
+parser.add_argument("--pin-mem" , default=False, action= argparse.BooleanOptionalAction, help="use pin memory for data loader")
+parser.add_argument("--use-amp" , default=False, action= argparse.BooleanOptionalAction, help="use amp for fp16")
 parser.add_argument("--debug"   , default=False, action= argparse.BooleanOptionalAction, help="in debug mode, program will shows more information")
 
 # DDP configs:
@@ -118,7 +124,7 @@ parser.add_argument('--world-size',   default=1, type=int, help='number of nodes
 parser.add_argument('--rank',         default=0, type=int, help='node rank for distributed training')
 parser.add_argument('--dist-url',     default='env://', type=str, help='url used to set up distributed training')
 parser.add_argument('--dist-backend', default='nccl', type=str, help='distributed backend')
-parser.add_argument('--local_rank',   default=0, type=int, help='local rank for distributed training')
+parser.add_argument('--local-rank',   default=0, type=int, help='local rank for distributed training')
 
 ############################################################################
 #  Model Parser for Each Model                                             #
@@ -126,25 +132,56 @@ parser.add_argument('--local_rank',   default=0, type=int, help='local rank for 
 
 # DualPrompt Parser
 dualprompt = argparse.ArgumentParser(description = 'Dualprompt Options')
-dualprompt.add_argument("--backbone_name", type=str)
-dualprompt.add_argument("--pos_g_prompt" , type=int, default = 1, nargs='+')
-dualprompt.add_argument("--len_g_prompt" , type=int)
-dualprompt.add_argument("--pos_e_prompt" , type=int, default = 2, nargs='+')
-dualprompt.add_argument("--len_e_prompt" , type=int)
+dualprompt.add_argument("--backbone-name", type=str)
+dualprompt.add_argument("--pos-g-prompt" , type=int, default = [1], nargs='+')
+dualprompt.add_argument("--len-g-prompt" , type=int)
+dualprompt.add_argument("--pos-e-prompt" , type=int, default = [2], nargs='+')
+dualprompt.add_argument("--len-e-prompt" , type=int)
 dualprompt.add_argument("--lambda"       , type=float, default=1.0)
-dualprompt.add_argument("--prompt_func"  , type=str)
+dualprompt.add_argument("--prompt-func"  , type=str)
 
 # L2P Parser
 l2p = argparse.ArgumentParser(description = 'L2P Options')
-l2p.add_argument("--backbone_name" , type=str)
-l2p.add_argument("--pool_size"     , type=int, default=10)
-l2p.add_argument("--selection_size", type=int, default=5)
-l2p.add_argument("--prompt_len"    , type=int, default=5)
+l2p.add_argument("--backbone-name" , type=str)
+l2p.add_argument("--pool-size"     , type=int, default=10)
+l2p.add_argument("--selection-size", type=int, default=5)
+l2p.add_argument("--prompt-len"    , type=int, default=5)
 l2p.add_argument("--lambda"        , type=float, default=0.5)
-l2p.add_argument("--_cls_at_front" ,       default=False, action= argparse.BooleanOptionalAction, help="set class token at front of prompt")
-l2p.add_argument("--_batchwise_selection", default=True,  action= argparse.BooleanOptionalAction, help="batchwise selection for")
-l2p.add_argument("--_mixed_prompt_order",  default=False, action= argparse.BooleanOptionalAction, help="randomize the order of prompt")
-l2p.add_argument("--_mixed_prompt_token",  default=False, action= argparse.BooleanOptionalAction, help="randomize the order of prompt")
+l2p.add_argument("--_cls-at-front" ,       default=False, action= argparse.BooleanOptionalAction, help="set class token at front of prompt")
+l2p.add_argument("--_batchwise-selection", default=True,  action= argparse.BooleanOptionalAction, help="batchwise selection for")
+l2p.add_argument("--_mixed-prompt-order",  default=False, action= argparse.BooleanOptionalAction, help="randomize the order of prompt")
+l2p.add_argument("--_mixed-prompt-token",  default=False, action= argparse.BooleanOptionalAction, help="randomize the order of prompt")
+l2p.add_argument("--_learnable-pos-emb",   default=False, action= argparse.BooleanOptionalAction, help="randomize the order of prompt")
+
+# EL2P Parser
+el2p = argparse.ArgumentParser(description = 'L2P Options')
+el2p.add_argument("--backbone-name",        type=str)
+el2p.add_argument("--pool-size",            type=int, default=10)
+el2p.add_argument("--selection-size",       type=int, default=5)
+el2p.add_argument("--reserve-rate",         type=float, default = 0.7)
+el2p.add_argument("--selection-layer",      type=int, default = [3,6,9], nargs='+')
+el2p.add_argument("--prompt-len",           type=int, default=5)
+el2p.add_argument("--lambda",               type=float, default=0.5)
+el2p.add_argument("--_cls-at-front",        default=False, action= argparse.BooleanOptionalAction, help="set class token at front of prompt")
+el2p.add_argument("--_batchwise-selection", default=True,  action= argparse.BooleanOptionalAction, help="batchwise selection for")
+el2p.add_argument("--_mixed-prompt-order",  default=False, action= argparse.BooleanOptionalAction, help="randomize the order of prompt")
+el2p.add_argument("--_mixed-prompt-token",  default=False, action= argparse.BooleanOptionalAction, help="randomize the order of prompt")
+
+
+# EL2P Parser
+certl2p = argparse.ArgumentParser(description = 'L2P Options')
+certl2p.add_argument("--backbone-name",        type=str)
+certl2p.add_argument("--pool-size",            type=int, default=10)
+certl2p.add_argument("--selection-size",       type=int, default=5)
+certl2p.add_argument("--reserve-rate",         type=float, default = 0.7)
+certl2p.add_argument("--selection-layer",      type=int, default = [3,6,9], nargs='+')
+certl2p.add_argument("--prompt-len",           type=int, default=5)
+certl2p.add_argument("--lambda",               type=float, default=0.5)
+certl2p.add_argument("--_cls-at-front",        default=False, action= argparse.BooleanOptionalAction, help="set class token at front of prompt")
+certl2p.add_argument("--_batchwise-selection", default=True,  action= argparse.BooleanOptionalAction, help="batchwise selection for")
+certl2p.add_argument("--_mixed-prompt-order",  default=False, action= argparse.BooleanOptionalAction, help="randomize the order of prompt")
+certl2p.add_argument("--_mixed-prompt-token",  default=False, action= argparse.BooleanOptionalAction, help="randomize the order of prompt")
+certl2p.add_argument("--_mode",                default=False, action= argparse.BooleanOptionalAction, help="randomize the order of prompt")
 
 ############################################################################
 #  Optimizer Parser for Each                                               #
@@ -188,35 +225,35 @@ rmsprop.add_argument("--centered"     , type=bool, default=False)
 # ConstantLR Parser
 const = argparse.ArgumentParser()
 const.add_argument("--factor"       , type=float, default=1)
-const.add_argument("--total_iters"  , type=int, default=100)
-const.add_argument("--last_epoch"   , type=int, default=-1)
+const.add_argument("--total-iters"  , type=int, default=100)
+const.add_argument("--last-epoch"   , type=int, default=-1)
 
 # ExponentialLR Parser
 exp = argparse.ArgumentParser()
 exp.add_argument("--lr"           , type=float, default=0.001)
-exp.add_argument("--step_size"    , type=int, default=1)
+exp.add_argument("--step-size"    , type=int, default=1)
 exp.add_argument("--gamma"        , type=float, default=0.1)
 exp.add_argument("--power"        , type=float, default=0.9)
-exp.add_argument("--last_epoch"   , type=int, default=0)
+exp.add_argument("--last-epoch"   , type=int, default=0)
 
 # CosineAnnealingLR Parser
 cos = argparse.ArgumentParser()
 cos.add_argument("--lr"           , type=float, default=0.001)
-cos.add_argument("--step_size"    , type=int, default=1)
+cos.add_argument("--step-size"    , type=int, default=1)
 cos.add_argument("--gamma"        , type=float, default=0.1)
-cos.add_argument("--warmup_steps" , type=int, default=0)
-cos.add_argument("--warmup_init_lr", type=float, default=0.001)
-cos.add_argument("--warmup_gamma" , type=float, default=0.1)
-cos.add_argument("--target_lr"    , type=float, default=0.001)
-cos.add_argument("--last_epoch"   , type=int, default=0)
+cos.add_argument("--warmup-steps" , type=int, default=0)
+cos.add_argument("--warmup-init-lr", type=float, default=0.001)
+cos.add_argument("--warmup-gamma" , type=float, default=0.1)
+cos.add_argument("--target-lr"    , type=float, default=0.001)
+cos.add_argument("--last-epoch"   , type=int, default=0)
 
 # StepLR Parser
 step = argparse.ArgumentParser()
 step.add_argument("--lr"             , type=float, default=0.001)
-step.add_argument("--step_size"      , type=int, default=1)
+step.add_argument("--step-size"      , type=int, default=1)
 step.add_argument("--gamma"          , type=float, default=0.1)
-step.add_argument("--warmup_steps"   , type=int, default=0)
-step.add_argument("--warmup_init_lr" , type=float, default=0.001)
-step.add_argument("--warmup_gamma"   , type=float, default=0.1)
-step.add_argument("--target_lr"      , type=float, default=0.001)
-step.add_argument("--last_epoch"     , type=int, default=0)
+step.add_argument("--warmup-steps"   , type=int, default=0)
+step.add_argument("--warmup-init-lr" , type=float, default=0.001)
+step.add_argument("--warmup-gamma"   , type=float, default=0.1)
+step.add_argument("--target-lr"      , type=float, default=0.001)
+step.add_argument("--last-epoch"     , type=int, default=0)

@@ -96,20 +96,27 @@ class Imgtrainer():
             self.main_worker(self.local_rank)
 
     def main_worker(self, gpu):
-
         self.gpu    = gpu % self.ngpus_per_nodes
         self.device = torch.device(self.gpu)
         if self.distributed:
             #os.environ['MASTER_PORT'] = str(int(os.environ['MASTER_PORT']) + self.rank * self.ngpus_per_nodes + gpu)
             self.local_rank = gpu
-            self.rank = int(os.environ['SLURM_PROCID']) * self.ngpus_per_nodes + gpu
-            print(f"| Init Process group {os.environ['SLURM_PROCID']} : {self.local_rank}")
+            if 'SLURM_PROCID' in os.environ.keys():
+                self.rank = int(os.environ['SLURM_PROCID']) * self.ngpus_per_nodes + gpu
+                print(f"| Init Process group {os.environ['SLURM_PROCID']} : {self.local_rank}")
+            else :
+                self.rank = gpu
+                print(f"| Init Process group 0 : {self.local_rank}")
+
+            if 'MASTER_ADDR' not in os.environ.keys():
+                os.environ['MASTER_ADDR'] = '127.0.0.1'
+                os.environ['MASTER_PORT'] = '12701'
             dist.init_process_group(backend=self.dist_backend, init_method=self.dist_url,
-                                    world_size=self.world_size, rank=self.local_rank)
+                                    world_size=self.world_size, rank=self.rank)
             self.setup_for_distributed(self.is_main_process())
         else:
             pass
-            
+        dist.barrier()
         if self.seed is not None:
             seed = self.seed + self.rank
             random.seed(seed)
@@ -133,12 +140,18 @@ class Imgtrainer():
         model.to(self.device)
         model_without_ddp = model
         if self.distributed:
-            model = torch.nn.parallel.DistributedDataParallel(model, find_unused_parameters=True)
-        model._set_static_graph()
+            model = torch.nn.parallel.DistributedDataParallel(model)
+            model._set_static_graph()
         model_without_ddp = model.module
         criterion = model_without_ddp.loss_fn if self.criterion == 'custom' else self.criterion()
         optimizer = self.optimizer(model.parameters(), **self.optimizer_args)
         scheduler = self.scheduler(optimizer, **self.scheduler_args)
+
+        n_params = sum(p.numel() for p in model_without_ddp.parameters())
+        print(f"Total Parameters :\t{n_params}")
+        n_params = sum(p.numel() for p in model_without_ddp.parameters() if p.requires_grad)
+        print(f"Learnable Parameters :\t{n_params}")
+        print("")
 
         if not self.training:
                 self.validate(self.dataset_val, sampler_val, test)
@@ -193,13 +206,14 @@ class Imgtrainer():
             # compute output
             output = model(images)
             loss = criterion(output, target)
-
+            torch.cuda.synchronize()
             # measure accuracy and record loss
             acc1, acc5 = accuracy(output, target, topk=(1, 5))
             losses.update(loss.item(), images.size(0))
             top1.update(acc1[0], images.size(0))
             top5.update(acc5[0], images.size(0))
 
+            torch.cuda.synchronize()
             # compute gradient and do SGD step
             loss.backward()
 
@@ -214,10 +228,12 @@ class Imgtrainer():
                 progress.display(i + 1)
                 
     def validate(self, loader, model, criterion):
+
         batch_time = AverageMeter('Time', ':6.3f', Summary.NONE)
         losses = AverageMeter('Loss', ':.4e', Summary.NONE)
         top1 = AverageMeter('Acc@1', ':6.2f', Summary.AVERAGE)
         top5 = AverageMeter('Acc@5', ':6.2f', Summary.AVERAGE)
+
         progress = ProgressMeter(
             len(loader),
             [batch_time, losses, top1, top5],
@@ -242,7 +258,7 @@ class Imgtrainer():
                 # measure elapsed time
                 batch_time.update(time.time() - end)
                 end = time.time()
-        #torch.cuda.synchronize()
+        torch.cuda.synchronize()
         if self.distributed:
             top1.all_reduce()
             top5.all_reduce()

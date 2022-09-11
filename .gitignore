@@ -1,5 +1,6 @@
 # Ignore Virtual Environment
 .venv/
+.vscode/
 
 # Ignore Python System Code
 **/__pycache__/

@@ -1,26 +1,25 @@
 from typing import TypeVar
 
-import timm
 import torch
 import torch.nn as nn
 import torch.nn.functional as F
 from layers.prompt import Prompt
+from models.EViT import EViT
 
-T = TypeVar('T', bound = 'nn.Module')
-
-class L2P(nn.Module):
+class EL2P(nn.Module):
     def __init__(self,
                  pool_size      : int   = 10,
                  selection_size : int   = 5,
                  prompt_len     : int   = 5,
                  class_num      : int   = 100,
+                 reserve_rate    : float = 0.7,
+                 selection_layer : tuple = (3,),
                  backbone_name  : str   = None,
                  lambd          : float = 0.5,
                  _cls_at_front  : bool  = False,
                  _batchwise_selection : bool = True,
                  _mixed_prompt_order   : bool  = False,
                  _mixed_prompt_token   : bool  = False,
-                 _learnable_pos_emb    : bool  = False,
                  **kwargs):
 
         super().__init__()
@@ -37,11 +36,7 @@ class L2P(nn.Module):
         self.class_num = class_num
         self._cls_at_front = _cls_at_front
 
-        self.add_module('backbone', timm.create_model(backbone_name, pretrained=True, num_classes=class_num))
-        for param in self.backbone.parameters():
-            param.requires_grad = False
-        self.backbone.head.weight.requires_grad = True
-        self.backbone.head.bias.requires_grad = True
+        self.backbone = EViT(backbone_name, class_num, reserve_rate, selection_layer)
 
         self.prompt = Prompt(
             pool_size,
@@ -51,8 +46,8 @@ class L2P(nn.Module):
             _batchwise_selection = _batchwise_selection,
             _mixed_prompt_order = _mixed_prompt_order,
             _mixed_prompt_token = _mixed_prompt_token)
-        self.pos_embed = nn.Parameter(self.backbone.pos_embed.detach().requires_grad_(_learnable_pos_emb))
-        
+
+        self.pos_embed = nn.Parameter(self.backbone.pos_embed.detach().requires_grad_(True))
         self.register_buffer('simmilarity', torch.zeros(1))
         self.register_buffer('mask', torch.zeros(class_num))
         
@@ -97,8 +92,3 @@ class L2P(nn.Module):
         self.mask += -torch.inf
         self.mask[task.to(self.mask.device)] = 0
         return self.prompt.update()
-
-    def train(self: T, mode: bool = True, **kwargs) -> T:
-        ten = super().train(mode)
-        self.backbone.eval()
-        return ten

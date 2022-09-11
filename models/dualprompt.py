@@ -54,8 +54,8 @@ class DualPrompt(L2P):
 
     def prompt_tuning(self, x : torch.Tensor, g_prompt : torch.Tensor, e_prompt : torch.Tensor, **kwargs):
         B, _, D = x.size()
-        g_prompt = g_prompt.view(B, self.g_length, self.len_g_prompt, D)
-        e_prompt = e_prompt.view(B, self.e_length, self.len_e_prompt, D)
+        g_prompt = g_prompt.view(B, self.g_length, self.len_g_prompt, D) + self.pos_embed.expand(g_prompt.size)
+        e_prompt = e_prompt.view(B, self.e_length, self.len_e_prompt, D) + self.pos_embed.expand(e_prompt.size)
 
         for n, block in enumerate(self.backbone.blocks):
             pos_g = ((self.pos_g_prompt == n).nonzero()).squeeze()
@@ -76,8 +76,8 @@ class DualPrompt(L2P):
         for n, block in enumerate(self.backbone.blocks):
             r  = x
             xq = block.norm1(x)
-            xk = x
-            xv = x
+            xk = xq
+            xv = xq
 
             pos_g = ((self.pos_g_prompt == n).nonzero()).squeeze()
             if pos_g.numel() != 0:
@@ -109,7 +109,6 @@ class DualPrompt(L2P):
 
             x = r + block.drop_path(x)
             x = x + block.drop_path(block.mlp(block.norm2(x)))
-
         x = self.backbone.norm(x)
         return x
 
