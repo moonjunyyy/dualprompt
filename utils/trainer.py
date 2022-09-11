@@ -116,7 +116,6 @@ class Imgtrainer():
             self.setup_for_distributed(self.is_main_process())
         else:
             pass
-        dist.barrier()
         if self.seed is not None:
             seed = self.seed + self.rank
             random.seed(seed)
@@ -142,7 +141,7 @@ class Imgtrainer():
         if self.distributed:
             model = torch.nn.parallel.DistributedDataParallel(model)
             model._set_static_graph()
-        model_without_ddp = model.module
+            model_without_ddp = model.module
         criterion = model_without_ddp.loss_fn if self.criterion == 'custom' else self.criterion()
         optimizer = self.optimizer(model.parameters(), **self.optimizer_args)
         scheduler = self.scheduler(optimizer, **self.scheduler_args)
