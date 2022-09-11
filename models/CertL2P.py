@@ -8,26 +8,27 @@ from models.CertViT import CertViT
 
 class CertL2P(CertViT):
     def __init__(self,
-                 pool_size      : int   = 10,
-                 selection_size : int   = 5,
-                 prompt_len     : int   = 5,
-                 class_num      : int   = 100,
+                 pool_size       : int   = 10,
+                 selection_size  : int   = 5,
+                 prompt_len      : int   = 5,
+                 class_num       : int   = 100,
                  reserve_rate    : float = 0.7,
                  selection_layer : tuple = (3,),
-                 backbone_name  : str   = None,
-                 lambd          : float = 0.5,
-                 _cls_at_front  : bool  = False,
-                 _batchwise_selection : bool = True,
-                 _mixed_prompt_order   : bool  = False,
-                 _mixed_prompt_token   : bool  = False,
-                 _mode           : bool  = False,  
+                 backbone_name   : str   = None,
+                 lambd           : float = 0.5,
+                 _cls_at_front          : bool = False,
+                 _batchwise_selection   : bool = True,
+                 _mixed_prompt_order    : bool = False,
+                 _mixed_prompt_token    : bool = False,
+                 _mode                  : bool = False,
+                 _learnable_pos_emb     : bool = True,
                  **kwargs):
 
         if backbone_name is None:
             raise ValueError('backbone_name must be specified')
         if pool_size < selection_size:
             raise ValueError('pool_size must be larger than selection_size')
-        super().__init__(backbone_name, class_num, reserve_rate, selection_layer, _mode)
+        super().__init__(backbone_name, class_num, reserve_rate, selection_layer, _mode, _learnable_pos_emb)
 
         self.prompt_len = prompt_len
         self.selection_size = selection_size

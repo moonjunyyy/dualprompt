@@ -13,6 +13,7 @@ class EViT(nn.Module):
                  class_num       : int   = 100,
                  reserve_rate    : float = 0.7,
                  selection_layer : tuple = (3,),
+                 _learnable_pos_emb : bool = True,
                  **kwargs):
 
         super().__init__()
@@ -27,6 +28,7 @@ class EViT(nn.Module):
             param.requires_grad = False
         self.backbone.head.weight.requires_grad = True
         self.backbone.head.bias.requires_grad = True
+        self.pos_embed = nn.Parameter(self.backbone.pos_embed.clone().detach().requires_grad_(_learnable_pos_emb))
     
     def cls_append(self, x : torch.Tensor, **kwargs) -> torch.Tensor:
         B, N, C = x.size()

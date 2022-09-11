@@ -16,8 +16,8 @@ class L2P(nn.Module):
                  class_num      : int   = 100,
                  backbone_name  : str   = None,
                  lambd          : float = 0.5,
-                 _cls_at_front  : bool  = False,
-                 _batchwise_selection : bool = True,
+                 _cls_at_front         : bool  = False,
+                 _batchwise_selection  : bool = True,
                  _mixed_prompt_order   : bool  = False,
                  _mixed_prompt_token   : bool  = False,
                  _learnable_pos_emb    : bool  = False,
@@ -51,7 +51,7 @@ class L2P(nn.Module):
             _batchwise_selection = _batchwise_selection,
             _mixed_prompt_order = _mixed_prompt_order,
             _mixed_prompt_token = _mixed_prompt_token)
-        self.pos_embed = nn.Parameter(self.backbone.pos_embed.detach().requires_grad_(_learnable_pos_emb))
+        self.pos_embed = nn.Parameter(self.backbone.pos_embed.clone().detach().requires_grad_(_learnable_pos_emb))
         
         self.register_buffer('simmilarity', torch.zeros(1))
         self.register_buffer('mask', torch.zeros(class_num))
