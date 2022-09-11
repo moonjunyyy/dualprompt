@@ -6,7 +6,7 @@ import torch.nn.functional as F
 from layers.prompt import Prompt
 from models.CertViT import CertViT
 
-class CertL2P(nn.Module):
+class CertL2P(CertViT):
     def __init__(self,
                  pool_size      : int   = 10,
                  selection_size : int   = 5,
@@ -23,12 +23,11 @@ class CertL2P(nn.Module):
                  _mode           : bool  = False,  
                  **kwargs):
 
-        super().__init__()
-        
         if backbone_name is None:
             raise ValueError('backbone_name must be specified')
         if pool_size < selection_size:
             raise ValueError('pool_size must be larger than selection_size')
+        super().__init__(backbone_name, class_num, reserve_rate, selection_layer, _mode)
 
         self.prompt_len = prompt_len
         self.selection_size = selection_size
@@ -36,8 +35,6 @@ class CertL2P(nn.Module):
         self._batchwise_selection = _batchwise_selection
         self.class_num = class_num
         self._cls_at_front = _cls_at_front
-
-        self.backbone = CertViT(backbone_name, class_num, reserve_rate, selection_layer, _mode)
 
         self.prompt = Prompt(
             pool_size,
@@ -53,6 +50,7 @@ class CertL2P(nn.Module):
         self.register_buffer('mask', torch.zeros(class_num))
         
     def forward(self, inputs : torch.Tensor, **kwargs) -> torch.Tensor:
+        
         x = self.backbone.patch_embed(inputs)
 
         B, N, D = x.size()
@@ -60,7 +58,7 @@ class CertL2P(nn.Module):
         t = torch.cat((cls_token, x), dim=1)
         x = self.backbone.pos_drop(t + self.backbone.pos_embed)
 
-        q = self.backbone.blocks(x)
+        q = self.feature_forward(x)
         q = self.backbone.norm(q)[:, 0].clone()
 
         s, p = self.prompt(q)
@@ -68,19 +66,21 @@ class CertL2P(nn.Module):
         p = p.contiguous().view(B, self.selection_size * self.prompt_len, D)
         p = p + self.pos_embed[:,0].clone().expand(self.selection_size * self.prompt_len, -1)
 
-        x = self.backbone.pos_drop(t + self.pos_embed)
+        x = self.backbone.pos_drop(t + self.backbone.pos_embed)
         if self._cls_at_front:
             x = torch.cat((x[:,0].unsqueeze(1), p, x[:,1:]), dim=1)
         else :
             x = torch.cat((p, x), dim=1)
-        x = self.backbone.blocks(x)
+        x = self.feature_forward(x)
         x = self.backbone.norm(x)
+
         if self._cls_at_front:
             x = x[:, 1:self.selection_size * self.prompt_len + 1].clone()
         else :
             x = x[:, :self.selection_size * self.prompt_len].clone()
         x = x.mean(dim=1)
         x = self.backbone.head(x)
+        
         if self.training:
             x = x + self.mask
         return x

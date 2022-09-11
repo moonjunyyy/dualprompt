@@ -18,7 +18,7 @@ def model_parser(model_name : str, args : list):
     elif model_name == "l2p":
         return L2P, vars(l2p.parse_known_args(args)[0])
     elif model_name == "el2p":
-        return L2P, vars(el2p.parse_known_args(args)[0])
+        return EL2P, vars(el2p.parse_known_args(args)[0])
     elif model_name == "certl2p":
         return CertL2P, vars(certl2p.parse_known_args(args)[0])
     else:

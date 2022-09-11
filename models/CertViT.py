@@ -31,8 +31,14 @@ class CertViT(nn.Module):
         self.backbone.head.weight.requires_grad = True
         self.backbone.head.bias.requires_grad = True
         
-    def feature_forward(self, inputs : torch.Tensor, **kwargs) -> torch.Tensor:
-        x = self.backbone.patch_embed(inputs)
+    def cls_append(self, x : torch.Tensor, **kwargs) -> torch.Tensor:
+        B, N, C = x.size()
+        cls_token = self.backbone.cls_token.expand(B, -1, -1)
+        x = torch.cat((cls_token, x), dim=1)
+        x = self.backbone.pos_drop(x + self.backbone.pos_embed)
+        return x
+
+    def feature_forward(self, x : torch.Tensor, **kwargs) -> torch.Tensor:
         B, N, C = x.size()
         for n, block in enumerate(self.backbone.blocks):
             r  = x
@@ -52,8 +58,9 @@ class CertViT(nn.Module):
                 else:
                     # Where to See (Queue) Filter
                     uncertainty = N / (attn + 1).sum(dim = -1)
-                uncertainty, idx = uncertainty.topk(int(N * self.reserve_rate), dim = -1, sorted=False)
-                attn = attn[idx[0],idx[1],idx[1]]
+                K = int(N * self.reserve_rate)
+                uncertainty, idx = uncertainty.topk(K, dim = -1, sorted=False)
+                attn = attn.gather(1, idx.unsqueeze(-1).expand(-1, -1, N))
             attn = attn.softmax(dim=-1)
             attn = self.attn_drop(attn)
 
@@ -63,10 +70,12 @@ class CertViT(nn.Module):
 
             x = r + block.drop_path(x)
             x = x + block.drop_path(block.mlp(block.norm2(x)))
-        x = self.backbone.norm(x)
         return x
 
     def forward(self, inputs : torch.Tensor, **kwargs) -> torch.Tensor:
-        x = self.feature_forward(inputs)
+        x = self.backbone.patch_embed(inputs)
+        x = self.cls_append(x)
+        x = self.feature_forward(x)
         x = self.backbond.head(x)
+        x = self.backbone.norm(x)
         return x
