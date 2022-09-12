@@ -17,7 +17,7 @@ class L2P(nn.Module):
                  backbone_name  : str   = None,
                  lambd          : float = 0.5,
                  _cls_at_front         : bool  = False,
-                 _batchwise_selection  : bool = True,
+                 _batchwise_selection  : bool  = True,
                  _mixed_prompt_order   : bool  = False,
                  _mixed_prompt_token   : bool  = False,
                  _learnable_pos_emb    : bool  = False,
@@ -51,7 +51,9 @@ class L2P(nn.Module):
             _batchwise_selection = _batchwise_selection,
             _mixed_prompt_order = _mixed_prompt_order,
             _mixed_prompt_token = _mixed_prompt_token)
-        self.pos_embed = nn.Parameter(self.backbone.pos_embed.clone().detach().requires_grad_(_learnable_pos_emb))
+
+        self.pos_embed = self.backbone.pos_embed.clone().detach()
+        self.pos_embed = nn.Parameter(self.pos_embed, requires_grad=_learnable_pos_emb)
         
         self.register_buffer('simmilarity', torch.zeros(1))
         self.register_buffer('mask', torch.zeros(class_num))
@@ -68,7 +70,7 @@ class L2P(nn.Module):
         q = self.backbone.norm(q)[:, 0].clone()
 
         s, p = self.prompt(q)
-        self.simmilarity = s.sum() / B
+        self.simmilarity = s.sum()
         p = p.contiguous().view(B, self.selection_size * self.prompt_len, D)
         p = p + self.pos_embed[:,0].clone().expand(self.selection_size * self.prompt_len, -1)
 
@@ -77,14 +79,17 @@ class L2P(nn.Module):
             x = torch.cat((x[:,0].unsqueeze(1), p, x[:,1:]), dim=1)
         else :
             x = torch.cat((p, x), dim=1)
+
         x = self.backbone.blocks(x)
         x = self.backbone.norm(x)
+
         if self._cls_at_front:
             x = x[:, 1:self.selection_size * self.prompt_len + 1].clone()
         else :
             x = x[:, :self.selection_size * self.prompt_len].clone()
         x = x.mean(dim=1)
         x = self.backbone.head(x)
+
         if self.training:
             x = x + self.mask
         return x

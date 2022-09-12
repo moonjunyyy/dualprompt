@@ -74,15 +74,15 @@ class ProgressMeter(object):
         entries += [meter.summary() for meter in self.meters]
         print(' '.join(entries))
 
-    def write(self, args, epoch, batch):
-        with SummaryWriter(args.save_path) as writer:
+    def write(self, save_path, epoch, batch, prefix=""):
+        with SummaryWriter(save_path) as writer:
             for meter in self.meters:
-               writer.add_scalar(meter.name, meter.val, epoch * self.num_batches + batch)
+               writer.add_scalar(meter.name + prefix, meter.val, epoch * self.num_batches + batch)
 
-    def write_summary(self, args, epoch):
-        with SummaryWriter(args.save_path) as writer:
+    def write_summary(self, save_path, epoch, prefix=""):
+        with SummaryWriter(save_path) as writer:
             for meter in self.meters:
-               writer.add_scalar("Epoch/"+meter.name, meter.val, epoch)
+               writer.add_scalar("Epoch/"+ prefix + meter.name, meter.val, epoch)
 
     def _get_batch_fmtstr(self, num_batches):
         num_digits = len(str(num_batches // 1))

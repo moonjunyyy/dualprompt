@@ -153,12 +153,12 @@ class Imgtrainer():
         print("")
 
         if not self.training:
-                self.validate(self.dataset_val, sampler_val, test)
+                self.validate(loader_val, model, criterion)
                 return
-        for task in range(self.num_tasks):
-            loader_train = self.set_task(self.dataset_train, sampler_train, task)
+        for self.task in range(self.num_tasks):
+            loader_train = self.set_task(self.dataset_train, sampler_train, self.task)
             print("Selection : ",(model_without_ddp._convert_train_task(sampler_train.get_task()).to(torch.int) - 1).tolist())
-            print(f"Training for task {task} : {sampler_train.get_task().tolist()}")
+            print(f"Training for task {self.task} : {sampler_train.get_task().tolist()}")
 
             for self.epoch in range(self.epochs):
                 sampler_train.set_epoch(self.epoch)
@@ -166,8 +166,8 @@ class Imgtrainer():
                 print('')
                 scheduler.step()
 
-            for test in range(task + 1):
-                loader_val = self.set_task(self.dataset_val, sampler_val, test) 
+            for self.test in range(self.task + 1):
+                loader_val = self.set_task(self.dataset_val, sampler_val, self.test) 
                 self.validate(loader_val, model, criterion)
 
             self.epoch = 0
@@ -225,6 +225,7 @@ class Imgtrainer():
                 optimizer.zero_grad()
             if i % log_interval == log_interval - 1 or i == len(loader) - 1:
                 progress.display(i + 1)
+        progress.write_summary(epoch = self.epoch, save_path = self.save_path, prefix='Train/')
                 
     def validate(self, loader, model, criterion):
 
@@ -262,6 +263,7 @@ class Imgtrainer():
             top1.all_reduce()
             top5.all_reduce()
         progress.display_summary()
+        progress.write_summary(epoch = self.test, save_path = self.save_path, prefix='Test/task{}/'.format(self.task))
 
         return top1.avg
     def save_on_master(self):

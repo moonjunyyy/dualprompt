@@ -70,7 +70,7 @@ class CILSampler(torch.utils.data.Sampler):
     or works like as common sampler in a non-distributed setting.
     Heavily based on RASampler by Facebook.
     """
-    def __init__(self, dataset, num_tasks = 1, num_replicas=None, rank=None, shuffle=True, num_repeats: int = 3, seed: int = 0):
+    def __init__(self, dataset, num_tasks = 1, num_replicas=None, rank=None, shuffle=True, num_repeats: int = 1, seed: int = 0):
 
         if num_replicas is not None:
             if not dist.is_available():

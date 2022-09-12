@@ -51,8 +51,8 @@ class Prompt(nn.Module):
             _,   mosts  = counts.topk(self.selection_size, largest=True, sorted=True)
             topk = idx[mosts].clone().expand(B, -1)
 
-        selection   = self.prompts[topk]
-        simmilarity = match.gather(1, topk)
+        selection   = self.prompts[topk].clone()
+        simmilarity = match.gather(1, topk).clone()
 
         # Mixed order prompt selection
         if self._mixed_prompt_order and self._mixed_prompt_token:
@@ -62,7 +62,7 @@ class Prompt(nn.Module):
         elif self._mixed_prompt_order:
             selection = selection[:, torch.randperm(self.selection_size)].clone()
         elif self._mixed_prompt_order:
-            selection = selection[:, :,torch.randperm(self.prompt_len)].clone()
+            selection = selection[:, :, torch.randperm(self.prompt_len)].clone()
 
         if self.training:
             self.counter += torch.bincount(topk.contiguous().view(-1), minlength = self.pool_size)

@@ -151,7 +151,7 @@ l2p.add_argument("--_cls-at-front" ,       default=True,  action= argparse.Boole
 l2p.add_argument("--_batchwise-selection", default=True,  action= argparse.BooleanOptionalAction, help="batchwise selection for")
 l2p.add_argument("--_mixed-prompt-order",  default=False, action= argparse.BooleanOptionalAction, help="randomize the order of prompt")
 l2p.add_argument("--_mixed-prompt-token",  default=False, action= argparse.BooleanOptionalAction, help="randomize the order of prompt")
-l2p.add_argument("--_learnable-pos-emb",   default=True,  action= argparse.BooleanOptionalAction, help="randomize the order of prompt")
+l2p.add_argument("--_learnable-pos-emb",   default=False,  action= argparse.BooleanOptionalAction, help="randomize the order of prompt")
 
 # EL2P Parser
 el2p = argparse.ArgumentParser(description = 'EL2P Options')
