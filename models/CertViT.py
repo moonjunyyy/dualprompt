@@ -14,13 +14,11 @@ class CertViT(nn.Module):
                  class_num       : int   = 100,
                  reserve_rate    : float = 0.7,
                  selection_layer : tuple = (3,),
-                 _mode              : bool = False,
-                 _learnable_pos_emb : bool = True,
+                 _learnable_pos_emb : bool = False,
                  **kwargs):
 
         super().__init__()
         
-        self._mode = _mode
         if backbone_name is None:
             raise ValueError('backbone_name must be specified')
         self.reserve_rate = reserve_rate
@@ -30,8 +28,15 @@ class CertViT(nn.Module):
         for param in self.backbone.parameters():
             param.requires_grad = False
         self.backbone.head.weight.requires_grad = True
-        self.backbone.head.bias.requires_grad = True
-        self.pos_embed = nn.Parameter(self.backbone.pos_embed.clone().detach().requires_grad_(_learnable_pos_emb))
+        self.backbone.head.bias.requires_grad = True        
+
+        self.pos_embed = self.backbone.pos_embed.clone().detach()
+        self.pos_embed.requires_grad = _learnable_pos_emb
+        self.pos_embed = nn.Parameter(self.pos_embed, requires_grad=_learnable_pos_emb)
+        
+        self.register_buffer('simmilarity', torch.zeros(1))
+        self.register_buffer('mask', torch.zeros(class_num))
+
         
     def cls_append(self, x : torch.Tensor, **kwargs) -> torch.Tensor:
         B, N, C = x.size()
@@ -42,38 +47,35 @@ class CertViT(nn.Module):
 
     def feature_forward(self, x : torch.Tensor, **kwargs) -> torch.Tensor:
         for n, block in enumerate(self.backbone.blocks):
+
             B, N, C = x.size()
-            r  = x
+            K = N
+            r = x
             x = block.norm1(x)
           
             msa   = block.attn
             qkv = msa.qkv(x).reshape(B, N, 3, msa.num_heads, C // msa.num_heads).permute(2, 0, 3, 1, 4)
             q, k, v = qkv[0], qkv[1], qkv[2]   # make torchscript happy (cannot use tensor as tuple)
-
             attn = (q @ k.transpose(-2, -1)) * msa.scale
-            
             layer = ((self.selection_layer == n).nonzero()).squeeze()
-            K = N
             if layer.numel() != 0:
                 K = int(N * self.reserve_rate)
-                if self._mode:
-                    # Who Cares Me (Key) Filter
-                    uncertainty = (N / (attn + 1).sum(dim = -2)).sum(dim = 1)
-                else:
-                    # Where to See (Queue) Filter
-                    uncertainty = (N / (attn + 1).sum(dim = -1)).sum(dim = 1)
-                uncertainty, idx = uncertainty.topk(K, dim = -1, sorted=False)
+                evidence = F.relu(attn)
+                uncertainty = (N / (evidence + 1).sum(-1)).sum(1)
+                uncertainty, idx = uncertainty[:, 1:].topk(K, dim = -1, largest = False, sorted=False)
             attn = attn.softmax(dim=-1)
             attn = msa.attn_drop(attn)
-
-            x = (attn @ v).transpose(1, 2).reshape(B, N, C)
+            x = (attn @ v).transpose(1, 2).reshape(B, -1, C)
             x = msa.proj(x)
             x = msa.proj_drop(x)
-
             x = r + block.drop_path(x)
-            x = x + block.drop_path(block.mlp(block.norm2(x)))
             if layer.numel() != 0:
-                x = x.gather(dim = 1, index = idx.unsqueeze(-1).expand(-1,-1,C))
+                cls_tkn  = x[:,0 ].unsqueeze(1)
+                img_tkn  = x[:,1:]
+                img_tkn  = img_tkn.gather(1, idx.unsqueeze(-1).expand(-1, -1, C))
+                rst_tkn  = (x[:,1:].sum(dim = -2, keepdim = True) - img_tkn.sum(dim = -2, keepdim = True)) / (N - K - 1)
+                x = torch.cat((cls_tkn, img_tkn, rst_tkn), dim = 1)
+            x = x + block.drop_path(block.mlp(block.norm2(x)))
         return x
 
     def forward(self, inputs : torch.Tensor, **kwargs) -> torch.Tensor:

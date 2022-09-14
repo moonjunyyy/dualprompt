@@ -16,18 +16,17 @@ class EL2P(EViT):
                  selection_layer : tuple = (3,),
                  backbone_name   : str   = None,
                  lambd           : float = 0.5,
-                 _cls_at_front        : bool = False,
+                 _cls_at_front        : bool = True,
                  _batchwise_selection : bool = True,
                  _mixed_prompt_order  : bool = False,
                  _mixed_prompt_token  : bool = False,
-                 _learnable_pos_emb   : bool = True,
+                 _learnable_pos_emb   : bool = False,
                  **kwargs):
 
         if backbone_name is None:
             raise ValueError('backbone_name must be specified')
         if pool_size < selection_size:
             raise ValueError('pool_size must be larger than selection_size')
-
         super().__init__(backbone_name, class_num, reserve_rate, selection_layer, _learnable_pos_emb)
 
         self.prompt_len = prompt_len
@@ -46,7 +45,6 @@ class EL2P(EViT):
             _mixed_prompt_order = _mixed_prompt_order,
             _mixed_prompt_token = _mixed_prompt_token)
 
-        self.pos_embed = nn.Parameter(self.backbone.pos_embed.detach().requires_grad_(True))
         self.register_buffer('simmilarity', torch.zeros(1))
         self.register_buffer('mask', torch.zeros(class_num))
         

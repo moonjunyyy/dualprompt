@@ -13,7 +13,7 @@ class EViT(nn.Module):
                  class_num       : int   = 100,
                  reserve_rate    : float = 0.7,
                  selection_layer : tuple = (3,),
-                 _learnable_pos_emb : bool = True,
+                 _learnable_pos_emb : bool = False,
                  **kwargs):
 
         super().__init__()
@@ -26,9 +26,13 @@ class EViT(nn.Module):
         self.add_module('backbone', timm.create_model(vit_name, pretrained=True, num_classes=class_num))
         for param in self.backbone.parameters():
             param.requires_grad = False
+
         self.backbone.head.weight.requires_grad = True
         self.backbone.head.bias.requires_grad = True
-        self.pos_embed = nn.Parameter(self.backbone.pos_embed.clone().detach().requires_grad_(_learnable_pos_emb))
+        
+        self.pos_embed = self.backbone.pos_embed.clone().detach()
+        self.pos_embed.requires_grad = _learnable_pos_emb
+        self.pos_embed = nn.Parameter(self.pos_embed, requires_grad=_learnable_pos_emb)
     
     def cls_append(self, x : torch.Tensor, **kwargs) -> torch.Tensor:
         B, N, C = x.size()
@@ -40,15 +44,19 @@ class EViT(nn.Module):
     def feature_forward(self, x : torch.Tensor, **kwargs) -> torch.Tensor:
         B, L, D = x.size()
         for n, block in enumerate(self.backbone.blocks):
-            x = block(x)
+            
+            x = x + block.drop_path(block.attn(block.norm1(x)))
             layer = ((self.selection_layer == n).nonzero()).squeeze()
             if layer.numel() != 0:
-                cls_tkn = x[:,0].unsqueeze(1)
-                img_tkn = x[:,1:]
+                cls_tkn  = x[:,0 ].unsqueeze(1)
+                img_tkn  = x[:,1:]
+                K   = int(L * self.reserve_rate)
                 sim = F.cosine_similarity(img_tkn, cls_tkn, dim = -1)
-                sim, idx = sim.topk(int(L * self.reserve_rate), dim = -1, sorted=False)
-                img_tkn = img_tkn.gather(1, idx.unsqueeze(-1).expand(-1, -1, D))
-                x = torch.cat([cls_tkn, img_tkn], dim = 1)
+                sim, idx = sim.topk(K, dim = -1, sorted=False)
+                img_tkn  = img_tkn.gather(1, idx.unsqueeze(-1).expand(-1, -1, D))
+                rst_tkn  = (x[:,1:].sum(dim = -2, keepdim = True) - img_tkn.sum(dim = -2, keepdim = True)) / (L - K - 1)
+                x   = torch.cat([cls_tkn, img_tkn, rst_tkn], dim = 1)
+            x = x + block.drop_path(block.mlp(block.norm2(x)))
         x = self.backbone.norm(x)
         return x
 

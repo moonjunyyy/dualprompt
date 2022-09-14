@@ -21,11 +21,11 @@ class DualPrompt(L2P):
         super().__init__(dimention= dimention,
                          class_num= class_num,
                          lambd= lambd,
-                         backbone_name= backbone_name, **kwargs)
+                         backbone_name= backbone_name,**kwargs)
         del(self.prompt)
         del(self.selection_size)
         del(self.prompt_len)
-        
+
         self.tasks = []
 
         self.register_buffer('pos_g_prompt', torch.tensor(pos_g_prompt, dtype= torch.int64))
@@ -34,8 +34,8 @@ class DualPrompt(L2P):
         self.len_e_prompt = len_e_prompt
         g_pool   = 1
         e_pool = task_num
-        self.g_length = len(pos_g_prompt)
-        self.e_length = len(pos_e_prompt)
+        self.g_length = len(pos_g_prompt) if pos_g_prompt else 0
+        self.e_length = len(pos_e_prompt) if pos_e_prompt else 0
         
         if prompt_func == 'prompt_tuning':
             self.prompt_func = self.prompt_tuning
@@ -54,10 +54,10 @@ class DualPrompt(L2P):
 
     def prompt_tuning(self, x : torch.Tensor, g_prompt : torch.Tensor, e_prompt : torch.Tensor, **kwargs):
         B, _, D = x.size()
-        g_prompt = g_prompt.view(B, 2 * self.g_length, self.len_g_prompt, D)
-        e_prompt = e_prompt.view(B, 2 * self.e_length, self.len_e_prompt, D)
-        #g_prompt = g_prompt + self.pos_embed[:,0,:].expand(g_prompt.size())
-        #e_prompt = e_prompt + self.pos_embed[:,0,:].expand(e_prompt.size())
+        g_prompt = g_prompt.view(B, self.g_length, self.len_g_prompt, D)
+        e_prompt = e_prompt.view(B, self.e_length, self.len_e_prompt, D)
+        g_prompt = g_prompt + self.pos_embed[:,0,:].unsqueeze(1).expand(g_prompt.size())
+        e_prompt = e_prompt + self.pos_embed[:,0,:].unsqueeze(1).expand(e_prompt.size())
 
         for n, block in enumerate(self.backbone.blocks):
             pos_g = ((self.pos_g_prompt == n).nonzero()).squeeze()
@@ -71,30 +71,33 @@ class DualPrompt(L2P):
         return x
     
     def prefix_tuning(self, x : torch.Tensor, g_prompt : torch.Tensor, e_prompt : torch.Tensor, **kwargs):
-        B, _, D = x.size()
-        g_prompt = g_prompt.view(B, 2 * self.g_length, self.len_g_prompt, D)
-        e_prompt = e_prompt.view(B, 2 * self.e_length, self.len_e_prompt, D)
-        #g_prompt = g_prompt + self.pos_embed[:,0,:].expand(g_prompt.size())
-        #e_prompt = e_prompt + self.pos_embed[:,0,:].expand(e_prompt.size())
+
+        B, N, C = x.size()
+        g_prompt = g_prompt.view(B, self.g_length, self.len_g_prompt, C)
+        e_prompt = e_prompt.view(B, self.e_length, self.len_e_prompt, C)
+        g_prompt = g_prompt + self.pos_embed[:,0,:].unsqueeze(1).expand(g_prompt.size())
+        e_prompt = e_prompt + self.pos_embed[:,0,:].unsqueeze(1).expand(e_prompt.size())
+
         for n, block in enumerate(self.backbone.blocks):
-            r  = x
+
             xq = block.norm1(x)
-            xk = xq
-            xv = xq
+            xk = xq.clone()
+            xv = xq.clone()
 
             pos_g = ((self.pos_g_prompt == n).nonzero()).squeeze()
             if pos_g.numel() != 0:
-                xk = torch.cat((xk, g_prompt[:, pos_g * 2 + 0].clone()), dim = 1)
-                xv = torch.cat((xv, g_prompt[:, pos_g * 2 + 1].clone()), dim = 1)
+                xk = torch.cat((xk, g_prompt[:, pos_g * 2 + 0].clone().unsqueeze(0).expand(B,-1,-1)), dim = 1)
+                xv = torch.cat((xv, g_prompt[:, pos_g * 2 + 1].clone().unsqueeze(0).expand(B,-1,-1)), dim = 1)
+
             pos_e = ((self.pos_e_prompt == n).nonzero()).squeeze()
             if pos_e.numel() != 0:
-                xk = torch.cat((xk, e_prompt[:, pos_e * 2 + 0].clone()), dim = 1)
-                xv = torch.cat((xv, e_prompt[:, pos_e * 2 + 1].clone()), dim = 1)
+                xk = torch.cat((xk, e_prompt[:, pos_e * 2 + 0].clone().unsqueeze(0).expand(B,-1,-1)), dim = 1)
+                xv = torch.cat((xv, e_prompt[:, pos_e * 2 + 1].clone().unsqueeze(0).expand(B,-1,-1)), dim = 1)
             
             attn   = block.attn
             weight = attn.qkv.weight
             bias   = attn.qkv.bias
-
+            
             B, N, C = xq.shape
             xq = F.linear(xq, weight[:C   ,:], bias[:C   ]).reshape(B,  N, attn.num_heads, C // attn.num_heads).permute(0, 2, 1, 3)
             _B, _N, _C = xk.shape
@@ -106,11 +109,11 @@ class DualPrompt(L2P):
             attention = attention.softmax(dim=-1)
             attention = attn.attn_drop(attention)
 
-            x = (attention @ xv).transpose(1, 2).reshape(B, N, C)
-            x = attn.proj(x)
-            x = attn.proj_drop(x)
+            attention = (attention @ xv).transpose(1, 2).reshape(B, N, C)
+            attention = attn.proj(attention)
+            attention = attn.proj_drop(attention)
 
-            x = r + block.drop_path(x)
+            x = x + block.drop_path(attention)
             x = x + block.drop_path(block.mlp(block.norm2(x)))
         return x
 
@@ -126,8 +129,8 @@ class DualPrompt(L2P):
 
         g_s, g_p = self.g_prompt(q)
         if self.training:
-            e_s = F.cosine_similarity(q, self.e_prompt.key[self.task_id].clone(), dim = -1)
-            e_p = self.e_prompt.prompts[self.task_id,:].clone().expand(B, -1, -1)
+            e_s = F.cosine_similarity(q, self.e_prompt.key[self.task_id], dim = -1)
+            e_p = self.e_prompt.prompts[self.task_id].clone().expand(B, -1, -1)
         else:
             e_s, e_p = self.e_prompt(q)
 
@@ -144,8 +147,8 @@ class DualPrompt(L2P):
                 flag = n
                 break
         if flag == -1:
-            self.task_id = len(self.tasks)
             self.tasks.append(task)
+            self.task_id = len(self.tasks) - 1
         else :
             self.task_id = flag
 
