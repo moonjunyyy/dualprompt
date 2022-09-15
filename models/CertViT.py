@@ -16,7 +16,7 @@ class CertViT(nn.Module):
                  selection_layer : tuple = (3,),
                  _learnable_pos_emb : bool = False,
                  **kwargs):
-
+        
         super().__init__()
         
         if backbone_name is None:
@@ -30,9 +30,7 @@ class CertViT(nn.Module):
         self.backbone.head.weight.requires_grad = True
         self.backbone.head.bias.requires_grad = True        
 
-        self.pos_embed = self.backbone.pos_embed.clone().detach()
-        self.pos_embed.requires_grad = _learnable_pos_emb
-        self.pos_embed = nn.Parameter(self.pos_embed, requires_grad=_learnable_pos_emb)
+        self.pos_embed = nn.Parameter(self.backbone.pos_embed.clone().detach(), requires_grad=_learnable_pos_emb)
         
         self.register_buffer('simmilarity', torch.zeros(1))
         self.register_buffer('mask', torch.zeros(class_num))
@@ -45,7 +43,7 @@ class CertViT(nn.Module):
         x = self.backbone.pos_drop(x + self.backbone.pos_embed)
         return x
 
-    def feature_forward(self, x : torch.Tensor, **kwargs) -> torch.Tensor:
+    def feature_forward(self, x : torch.Tensor, keep_prompts = 0, **kwargs) -> torch.Tensor:
         for n, block in enumerate(self.backbone.blocks):
 
             B, N, C = x.size()
@@ -57,12 +55,16 @@ class CertViT(nn.Module):
             qkv = msa.qkv(x).reshape(B, N, 3, msa.num_heads, C // msa.num_heads).permute(2, 0, 3, 1, 4)
             q, k, v = qkv[0], qkv[1], qkv[2]   # make torchscript happy (cannot use tensor as tuple)
             attn = (q @ k.transpose(-2, -1)) * msa.scale
+
             layer = ((self.selection_layer == n).nonzero()).squeeze()
             if layer.numel() != 0:
-                K = int(N * self.reserve_rate)
+                K = int((N - keep_prompts) * self.reserve_rate)
                 evidence = F.relu(attn)
-                uncertainty = (N / (evidence + 1).sum(-1)).sum(1)
-                uncertainty, idx = uncertainty[:, 1:].topk(K, dim = -1, largest = False, sorted=False)
+                strength = (evidence + 1).sum(-1, keepdim=True)
+                uncertainty = (N / strength)
+                belief = torch.concat(((evidence / strength), uncertainty), dim=-1)
+                uncertainty = belief[:, :, :, -1].mean(dim = 1)
+                _, idx = uncertainty[:, 1 + keep_prompts:].topk(K, dim = -1, largest = False, sorted=False)
             attn = attn.softmax(dim=-1)
             attn = msa.attn_drop(attn)
             x = (attn @ v).transpose(1, 2).reshape(B, -1, C)
@@ -70,10 +72,10 @@ class CertViT(nn.Module):
             x = msa.proj_drop(x)
             x = r + block.drop_path(x)
             if layer.numel() != 0:
-                cls_tkn  = x[:,0 ].unsqueeze(1)
+                cls_tkn  = x[:, :1 + keep_prompts].unsqueeze(1)
                 img_tkn  = x[:,1:]
                 img_tkn  = img_tkn.gather(1, idx.unsqueeze(-1).expand(-1, -1, C))
-                rst_tkn  = (x[:,1:].sum(dim = -2, keepdim = True) - img_tkn.sum(dim = -2, keepdim = True)) / (N - K - 1)
+                rst_tkn  = (x[:,1 + keep_prompts + 1:].sum(dim = -2, keepdim = True) - img_tkn.sum(dim = -2, keepdim = True))
                 x = torch.cat((cls_tkn, img_tkn, rst_tkn), dim = 1)
             x = x + block.drop_path(block.mlp(block.norm2(x)))
         return x

@@ -4,10 +4,9 @@ import timm
 import torch
 import torch.nn as nn
 import torch.nn.functional as F
-
 T = TypeVar('T', bound = 'nn.Module')
 
-class EViT(nn.Module):
+class PrEL2P(nn.Module):
     def __init__(self,
                  vit_name        : str   = None,
                  class_num       : int   = 100,

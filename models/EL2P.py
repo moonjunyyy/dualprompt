@@ -70,7 +70,7 @@ class EL2P(EViT):
             x = torch.cat((x[:,0].unsqueeze(1), p, x[:,1:]), dim=1)
         else :
             x = torch.cat((p, x), dim=1)
-        x = self.feature_forward(x)
+        x = self.feature_forward(x, self.prompt_len * self.selection_size + 1)
         x = self.backbone.norm(x)
 
         if self._cls_at_front:

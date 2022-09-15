@@ -8,6 +8,8 @@ from torchvision.datasets import CIFAR10, CIFAR100, MNIST, FashionMNIST
 from models.dualprompt import DualPrompt
 from models.L2P import L2P
 from models.EL2P import EL2P
+from models.ScaledL2P import ScaledL2P
+from models.PrEL2P import PrEL2P
 from models.CertL2P import CertL2P
 
 #Functions to parse arguments
@@ -21,6 +23,10 @@ def model_parser(model_name : str, args : list):
         return EL2P, vars(el2p.parse_known_args(args)[0])
     elif model_name == "certl2p":
         return CertL2P, vars(certl2p.parse_known_args(args)[0])
+    elif model_name == "scaledl2p":
+        return ScaledL2P, vars(scaledl2p.parse_known_args(args)[0])
+    elif model_name == "prel2p":
+        return PrEL2P, vars(prel2p.parse_known_args(args)[0])
     else:
         raise ValueError("unknown model name {}".format(model_name)[0])
 
@@ -153,36 +159,25 @@ l2p.add_argument("--_mixed-prompt-order",  default=False, action= argparse.Boole
 l2p.add_argument("--_mixed-prompt-token",  default=False, action= argparse.BooleanOptionalAction, help="randomize the order of prompt")
 l2p.add_argument("--_learnable-pos-emb",   default=False,  action= argparse.BooleanOptionalAction, help="randomize the order of prompt")
 
+# ScaledL2P Parser
+scaledl2p = argparse.ArgumentParser(parents=l2p, description = 'ScaledL2P Options')
+scaledl2p.add_argument("--tau",                default=1.0, type=float)
+scaledl2p.add_argument("--_scale_simmilarity", default=False, action= argparse.BooleanOptionalAction, help="randomize the order of prompt")
+
 # EL2P Parser
-el2p = argparse.ArgumentParser(description = 'EL2P Options')
-el2p.add_argument("--backbone-name",        type=str)
-el2p.add_argument("--pool-size",            type=int, default=10)
-el2p.add_argument("--selection-size",       type=int, default=5)
-el2p.add_argument("--prompt-len",           type=int, default=5)
+el2p = argparse.ArgumentParser(parents=l2p, description = 'EL2P Options')
 el2p.add_argument("--selection-layer",      type=int, default = [3,6,9], nargs='+')
 el2p.add_argument("--reserve-rate",         type=float, default = 0.7)
-el2p.add_argument("--lambda",               type=float, default=0.5)
-el2p.add_argument("--_cls-at-front",        default=True,  action= argparse.BooleanOptionalAction, help="set class token at front of prompt")
-el2p.add_argument("--_batchwise-selection", default=True,  action= argparse.BooleanOptionalAction, help="batchwise selection for")
-el2p.add_argument("--_mixed-prompt-order",  default=False, action= argparse.BooleanOptionalAction, help="randomize the order of prompt")
-el2p.add_argument("--_mixed-prompt-token",  default=False, action= argparse.BooleanOptionalAction, help="randomize the order of prompt")
-el2p.add_argument("--_learnable-pos-emb",   default=False,  action= argparse.BooleanOptionalAction, help="randomize the order of prompt")
 
+# EL2P Parser
+prel2p = argparse.ArgumentParser(parents=l2p, description = 'PrEL2P Options')
+prel2p.add_argument("--selection-layer",      type=int, default = [3,6,9], nargs='+')
+prel2p.add_argument("--reserve-rate",         type=float, default = 0.7)
 
 # CertL2P Parser
-certl2p = argparse.ArgumentParser(description = 'CertL2P Options')
-certl2p.add_argument("--backbone-name",        type=str)
-certl2p.add_argument("--pool-size",            type=int, default=10)
-certl2p.add_argument("--selection-size",       type=int, default=5)
-certl2p.add_argument("--prompt-len",           type=int, default=5)
+certl2p = argparse.ArgumentParser(dparents=l2p, escription = 'CertL2P Options')
 certl2p.add_argument("--selection-layer",      type=int, default = [3,6,9], nargs='+')
 certl2p.add_argument("--reserve-rate",         type=float, default = 0.7)
-certl2p.add_argument("--lambda",               type=float, default=0.5)
-certl2p.add_argument("--_cls-at-front",        default=True,  action= argparse.BooleanOptionalAction, help="set class token at front of prompt")
-certl2p.add_argument("--_batchwise-selection", default=True,  action= argparse.BooleanOptionalAction, help="batchwise selection for")
-certl2p.add_argument("--_mixed-prompt-order",  default=False, action= argparse.BooleanOptionalAction, help="randomize the order of prompt")
-certl2p.add_argument("--_mixed-prompt-token",  default=False, action= argparse.BooleanOptionalAction, help="randomize the order of prompt")
-certl2p.add_argument("--_learnable-pos-emb",   default=False,  action= argparse.BooleanOptionalAction, help="randomize the order of prompt")
 
 ############################################################################
 #  Optimizer Parser for Each                                               #

@@ -1,0 +1,620 @@
+Using custom criterion, please specify the loss_fn in the model
+{'model': <class 'models.EL2P.EL2P'>, 'criterion': 'custom', 'optimizer': <class 'torch.optim.adam.Adam'>, 'scheduler': <class 'torch.optim.lr_scheduler.ConstantLR'>, 'batch_size': 32, 'step_size': 128, 'epochs': 5, 'log_frequency': 1, 'num_tasks': 10, 'task_governor': 'CIL', 'num_workers': 4, 'dataset': <class 'torchvision.datasets.cifar.CIFAR100'>, 'dataset_path': '/home/moonjunyyy/dataset/', 'save_path': 'saved/dualprompt', 'seed': 42, 'device': 'cuda', 'pin_mem': False, 'use_amp': False, 'debug': False, 'world_size': 1, 'rank': 0, 'dist_url': 'env://', 'dist_backend': 'nccl', 'local_rank': 0, 'model_args': {'backbone_name': 'vit_base_patch16_224_l2p', 'pool_size': 10, 'selection_size': 5, 'prompt_len': 5, 'selection_layer': [3, 6, 9], 'reserve_rate': 0.7, 'lambda': 0.5, '_cls_at_front': True, '_batchwise_selection': True, '_mixed_prompt_order': False, '_mixed_prompt_token': False, '_learnable_pos_emb': False, 'class_num': 100}, 'optimizer_args': {'lr': 0.001, 'betas': (0.9, 0.999), 'eps': 1e-08, 'weight_decay': 0, 'amsgrad': False}, 'scheduler_args': {'factor': 1, 'total_iters': 100, 'last_epoch': -1}}
+Files already downloaded and verified
+Files already downloaded and verified
+You have chosen to seed training. This will turn on the CUDNN deterministic setting, which can slow down your training considerably! You may see unexpected behavior when restarting from checkpoints.
+Building model...
+Total Parameters :	86072932
+Learnable Parameters :	122980
+
+Selection :  [0, 0, 0, 0, 0, 0, 0, 0, 0, 0]
+Training for task 0 : [42, 96, 62, 98, 46, 95, 60, 24, 78, 16]
+Epoch: [1][157/157]	Time  0.184 ( 0.442)	Data  0.003 ( 0.033)	Loss 1.3455e+00 (1.6780e+00)	Acc@1  75.00 ( 75.78)	Acc@5 100.00 ( 94.72)
+
+Epoch: [2][157/157]	Time  0.135 ( 0.436)	Data  0.003 ( 0.033)	Loss 4.7702e-01 (7.8763e-01)	Acc@1 100.00 ( 89.78)	Acc@5 100.00 ( 99.34)
+
+Epoch: [3][157/157]	Time  0.139 ( 0.435)	Data  0.004 ( 0.033)	Loss -8.9757e-02 (3.6006e-01)	Acc@1 100.00 ( 91.26)	Acc@5 100.00 ( 99.54)
+
+Epoch: [4][157/157]	Time  0.136 ( 0.436)	Data  0.003 ( 0.033)	Loss -1.1538e-01 (1.3183e-01)	Acc@1 100.00 ( 92.44)	Acc@5 100.00 ( 99.60)
+
+Epoch: [5][157/157]	Time  0.138 ( 0.436)	Data  0.003 ( 0.033)	Loss 5.4674e-03 (-2.3643e-02)	Acc@1  87.50 ( 93.24)	Acc@5 100.00 ( 99.72)
+
+ *   Acc@1 93.300 Acc@5 99.300
+
+Selection :  [25000, 24936, 384, 25000, 24680, 0, 0, 25000, 0, 0]
+Training for task 1 : [68, 70, 11, 13, 97, 52, 99, 19, 71, 10]
+Epoch: [1][157/157]	Time  0.137 ( 0.436)	Data  0.003 ( 0.033)	Loss 8.3895e-01 (1.3125e+00)	Acc@1  87.50 ( 77.60)	Acc@5 100.00 ( 94.40)
+
+Epoch: [2][157/157]	Time  0.139 ( 0.436)	Data  0.003 ( 0.033)	Loss 2.4998e-01 (3.8216e-01)	Acc@1  75.00 ( 92.72)	Acc@5 100.00 ( 99.40)
+
+Epoch: [3][157/157]	Time  0.152 ( 0.458)	Data  0.004 ( 0.033)	Loss 6.6056e-02 (-1.5880e-02)	Acc@1 100.00 ( 94.14)	Acc@5 100.00 ( 99.52)
+
+Epoch: [4][157/157]	Time  0.197 ( 0.517)	Data  0.006 ( 0.039)	Loss -3.4143e-01 (-2.2244e-01)	Acc@1 100.00 ( 94.94)	Acc@5 100.00 ( 99.60)
+
+Epoch: [5][157/157]	Time  0.171 ( 0.526)	Data  0.004 ( 0.043)	Loss -3.9734e-01 (-3.6150e-01)	Acc@1 100.00 ( 95.60)	Acc@5 100.00 ( 99.72)
+
+ *   Acc@1 82.900 Acc@5 98.900
+ *   Acc@1 84.000 Acc@5 98.600
+
+Selection :  [49896, 49872, 25320, 49992, 24904, 0, 16, 50000, 0, 0]
+Training for task 2 : [89, 86, 18, 40, 5, 38, 9, 82, 83, 43]
+Epoch: [1][157/157]	Time  0.175 ( 0.514)	Data  0.004 ( 0.044)	Loss 5.8497e-01 (1.0449e+00)	Acc@1  87.50 ( 79.06)	Acc@5 100.00 ( 94.42)
+
+Epoch: [2][157/157]	Time  0.176 ( 0.519)	Data  0.004 ( 0.045)	Loss -2.5919e-01 (1.4149e-01)	Acc@1 100.00 ( 93.02)	Acc@5 100.00 ( 99.62)
+
+Epoch: [3][157/157]	Time  0.181 ( 0.514)	Data  0.004 ( 0.044)	Loss -3.9553e-01 (-2.4600e-01)	Acc@1  87.50 ( 93.98)	Acc@5 100.00 ( 99.82)
+
+Epoch: [4][157/157]	Time  0.171 ( 0.515)	Data  0.004 ( 0.044)	Loss -3.3558e-01 (-4.3615e-01)	Acc@1 100.00 ( 94.84)	Acc@5 100.00 ( 99.88)
+
+Epoch: [5][157/157]	Time  0.185 ( 0.516)	Data  0.006 ( 0.044)	Loss -6.4985e-01 (-3.9965e-01)	Acc@1 100.00 ( 95.00)	Acc@5 100.00 ( 99.88)
+
+ *   Acc@1 82.700 Acc@5 97.600
+ *   Acc@1 80.400 Acc@5 97.600
+ *   Acc@1 85.200 Acc@5 97.600
+
+Selection :  [70648, 50904, 49680, 74928, 49840, 72, 4312, 74616, 0, 0]
+Training for task 3 : [32, 94, 67, 93, 75, 59, 79, 1, 50, 73]
+Epoch: [1][157/157]	Time  0.175 ( 0.515)	Data  0.004 ( 0.044)	Loss 9.5542e-01 (1.0996e+00)	Acc@1  75.00 ( 72.40)	Acc@5 100.00 ( 92.92)
+
+Epoch: [2][157/157]	Time  0.174 ( 0.513)	Data  0.004 ( 0.044)	Loss 5.9084e-01 (4.3844e-01)	Acc@1  62.50 ( 85.20)	Acc@5  87.50 ( 98.54)
+
+Epoch: [3][157/157]	Time  0.178 ( 0.508)	Data  0.005 ( 0.044)	Loss -5.4951e-02 (8.8384e-02)	Acc@1  75.00 ( 87.56)	Acc@5 100.00 ( 98.84)
+
+Epoch: [4][157/157]	Time  0.179 ( 0.510)	Data  0.005 ( 0.043)	Loss -4.9166e-01 (-1.1755e-01)	Acc@1 100.00 ( 89.02)	Acc@5 100.00 ( 99.22)
+
+Epoch: [5][157/157]	Time  0.173 ( 0.512)	Data  0.004 ( 0.043)	Loss -4.9275e-01 (-2.5840e-01)	Acc@1 100.00 ( 89.96)	Acc@5 100.00 ( 99.38)
+
+ *   Acc@1 79.200 Acc@5 97.000
+ *   Acc@1 77.700 Acc@5 96.600
+ *   Acc@1 83.300 Acc@5 96.500
+ *   Acc@1 78.400 Acc@5 95.600
+
+Selection :  [73656, 75904, 74264, 76784, 74776, 19472, 29312, 75832, 0, 0]
+Training for task 4 : [66, 45, 63, 58, 22, 3, 87, 4, 61, 51]
+Epoch: [1][157/157]	Time  0.171 ( 0.511)	Data  0.004 ( 0.044)	Loss 6.0549e-01 (1.0131e+00)	Acc@1  87.50 ( 71.56)	Acc@5 100.00 ( 93.30)
+
+Epoch: [2][157/157]	Time  0.177 ( 0.511)	Data  0.004 ( 0.043)	Loss 1.3582e-02 (2.1692e-01)	Acc@1  87.50 ( 85.68)	Acc@5 100.00 ( 98.94)
+
+Epoch: [3][157/157]	Time  0.169 ( 0.510)	Data  0.004 ( 0.043)	Loss -4.7100e-01 (-1.6050e-01)	Acc@1 100.00 ( 87.70)	Acc@5 100.00 ( 99.34)
+
+Epoch: [4][157/157]	Time  0.172 ( 0.509)	Data  0.004 ( 0.044)	Loss -3.5412e-01 (-3.6077e-01)	Acc@1 100.00 ( 89.40)	Acc@5 100.00 ( 99.60)
+
+Epoch: [5][157/157]	Time  0.171 ( 0.509)	Data  0.004 ( 0.043)	Loss -6.9179e-01 (-4.9323e-01)	Acc@1 100.00 ( 90.28)	Acc@5 100.00 ( 99.70)
+
+ *   Acc@1 77.100 Acc@5 97.400
+ *   Acc@1 76.500 Acc@5 96.400
+ *   Acc@1 84.500 Acc@5 96.200
+ *   Acc@1 81.400 Acc@5 95.000
+ *   Acc@1 72.600 Acc@5 93.700
+
+Selection :  [98656, 75904, 74264, 101784, 74776, 44472, 54312, 100832, 0, 0]
+Training for task 5 : [12, 74, 21, 20, 6, 35, 44, 48, 37, 33]
+Epoch: [1][157/157]	Time  0.170 ( 0.509)	Data  0.006 ( 0.043)	Loss 4.0536e-01 (8.0283e-01)	Acc@1 100.00 ( 80.52)	Acc@5 100.00 ( 94.96)
+
+Epoch: [2][157/157]	Time  0.176 ( 0.510)	Data  0.006 ( 0.044)	Loss -4.8756e-01 (-8.3212e-02)	Acc@1 100.00 ( 92.84)	Acc@5 100.00 ( 99.62)
+
+Epoch: [3][157/157]	Time  0.180 ( 0.514)	Data  0.004 ( 0.044)	Loss -8.1846e-01 (-4.3941e-01)	Acc@1 100.00 ( 93.62)	Acc@5 100.00 ( 99.70)
+
+Epoch: [4][157/157]	Time  0.176 ( 0.511)	Data  0.004 ( 0.045)	Loss -4.7874e-01 (-6.1078e-01)	Acc@1 100.00 ( 94.24)	Acc@5 100.00 ( 99.74)
+
+Epoch: [5][157/157]	Time  0.176 ( 0.512)	Data  0.004 ( 0.044)	Loss -7.0423e-01 (-7.1994e-01)	Acc@1 100.00 ( 94.84)	Acc@5 100.00 ( 99.76)
+
+ *   Acc@1 75.300 Acc@5 96.700
+ *   Acc@1 74.700 Acc@5 95.200
+ *   Acc@1 85.300 Acc@5 96.100
+ *   Acc@1 78.500 Acc@5 94.300
+ *   Acc@1 71.500 Acc@5 92.500
+ *   Acc@1 77.300 Acc@5 94.800
+
+Selection :  [98688, 100904, 99256, 101784, 99744, 69472, 79312, 100832, 0, 8]
+Training for task 6 : [15, 88, 31, 69, 27, 81, 85, 56, 7, 65]
+Epoch: [1][157/157]	Time  0.173 ( 0.510)	Data  0.007 ( 0.044)	Loss -2.6645e-01 (5.4165e-01)	Acc@1 100.00 ( 82.40)	Acc@5 100.00 ( 95.22)
+
+Epoch: [2][157/157]	Time  0.169 ( 0.511)	Data  0.004 ( 0.044)	Loss -3.8049e-02 (-3.6044e-01)	Acc@1  75.00 ( 93.46)	Acc@5 100.00 ( 99.32)
+
+Epoch: [3][157/157]	Time  0.169 ( 0.511)	Data  0.004 ( 0.044)	Loss -6.7338e-01 (-6.7223e-01)	Acc@1  87.50 ( 94.52)	Acc@5 100.00 ( 99.50)
+
+Epoch: [4][157/157]	Time  0.184 ( 0.512)	Data  0.004 ( 0.043)	Loss -8.3403e-01 (-8.1492e-01)	Acc@1 100.00 ( 94.98)	Acc@5 100.00 ( 99.64)
+
+Epoch: [5][157/157]	Time  0.180 ( 0.511)	Data  0.005 ( 0.043)	Loss -7.6794e-01 (-9.0568e-01)	Acc@1  87.50 ( 95.36)	Acc@5 100.00 ( 99.76)
+
+ *   Acc@1 71.600 Acc@5 96.200
+ *   Acc@1 71.600 Acc@5 95.100
+ *   Acc@1 84.900 Acc@5 95.500
+ *   Acc@1 76.100 Acc@5 93.200
+ *   Acc@1 71.500 Acc@5 91.200
+ *   Acc@1 75.400 Acc@5 93.200
+ *   Acc@1 79.200 Acc@5 93.100
+
+Selection :  [123688, 100936, 99256, 126752, 99744, 94472, 104312, 125832, 0, 8]
+Training for task 7 : [47, 41, 29, 80, 57, 84, 36, 17, 34, 72]
+Epoch: [1][157/157]	Time  0.177 ( 0.511)	Data  0.008 ( 0.044)	Loss -2.2801e-01 (4.7941e-01)	Acc@1 100.00 ( 83.20)	Acc@5 100.00 ( 96.14)
+
+Epoch: [2][157/157]	Time  0.175 ( 0.509)	Data  0.004 ( 0.044)	Loss -3.8938e-01 (-4.1018e-01)	Acc@1 100.00 ( 94.14)	Acc@5 100.00 ( 99.48)
+
+Epoch: [3][157/157]	Time  0.175 ( 0.510)	Data  0.004 ( 0.043)	Loss -8.2354e-01 (-7.2280e-01)	Acc@1  87.50 ( 94.86)	Acc@5 100.00 ( 99.56)
+
+Epoch: [4][157/157]	Time  0.171 ( 0.511)	Data  0.004 ( 0.044)	Loss -7.0783e-01 (-8.6540e-01)	Acc@1 100.00 ( 95.22)	Acc@5 100.00 ( 99.68)
+
+Epoch: [5][157/157]	Time  0.176 ( 0.510)	Data  0.004 ( 0.043)	Loss -1.2680e+00 (-9.5337e-01)	Acc@1 100.00 ( 95.68)	Acc@5 100.00 ( 99.80)
+
+ *   Acc@1 69.100 Acc@5 95.300
+ *   Acc@1 71.500 Acc@5 92.700
+ *   Acc@1 84.500 Acc@5 95.500
+ *   Acc@1 73.700 Acc@5 92.600
+ *   Acc@1 71.100 Acc@5 89.800
+ *   Acc@1 74.700 Acc@5 92.600
+ *   Acc@1 78.100 Acc@5 93.000
+ *   Acc@1 74.700 Acc@5 91.300
+
+Selection :  [123688, 125936, 124256, 126752, 124744, 119472, 129312, 125832, 0, 8]
+Training for task 8 : [2, 91, 8, 53, 30, 90, 26, 23, 54, 76]
+Epoch: [1][157/157]	Time  0.173 ( 0.509)	Data  0.004 ( 0.044)	Loss -2.0561e-01 (3.1056e-01)	Acc@1  87.50 ( 83.70)	Acc@5 100.00 ( 95.92)
+
+Epoch: [2][157/157]	Time  0.184 ( 0.510)	Data  0.009 ( 0.044)	Loss -7.2442e-01 (-5.9819e-01)	Acc@1  87.50 ( 95.38)	Acc@5 100.00 ( 99.74)
+
+Epoch: [3][157/157]	Time  0.178 ( 0.511)	Data  0.005 ( 0.044)	Loss -8.7944e-01 (-9.3181e-01)	Acc@1  87.50 ( 96.22)	Acc@5 100.00 ( 99.80)
+
+Epoch: [4][157/157]	Time  0.176 ( 0.510)	Data  0.005 ( 0.043)	Loss -1.1554e+00 (-1.0741e+00)	Acc@1 100.00 ( 96.56)	Acc@5 100.00 ( 99.90)
+
+Epoch: [5][157/157]	Time  0.174 ( 0.511)	Data  0.004 ( 0.044)	Loss -1.1604e+00 (-1.1539e+00)	Acc@1  87.50 ( 96.90)	Acc@5 100.00 ( 99.96)
+
+ *   Acc@1 72.000 Acc@5 95.000
+ *   Acc@1 68.400 Acc@5 92.000
+ *   Acc@1 83.900 Acc@5 95.400
+ *   Acc@1 75.000 Acc@5 93.200
+ *   Acc@1 72.300 Acc@5 91.500
+ *   Acc@1 75.800 Acc@5 93.500
+ *   Acc@1 74.600 Acc@5 91.600
+ *   Acc@1 73.700 Acc@5 90.900
+ *   Acc@1 80.800 Acc@5 96.700
+
+Selection :  [148688, 150936, 124256, 151752, 124744, 144472, 129312, 150832, 0, 8]
+Training for task 9 : [14, 55, 0, 64, 77, 39, 25, 92, 49, 28]
+Epoch: [1][157/157]	Time  0.174 ( 0.509)	Data  0.004 ( 0.044)	Loss 3.5217e-02 (3.4454e-01)	Acc@1 100.00 ( 81.08)	Acc@5 100.00 ( 94.76)
+
+Epoch: [2][157/157]	Time  0.169 ( 0.510)	Data  0.004 ( 0.044)	Loss -9.1305e-01 (-5.3373e-01)	Acc@1 100.00 ( 94.42)	Acc@5 100.00 ( 99.60)
+
+Epoch: [3][157/157]	Time  0.174 ( 0.510)	Data  0.005 ( 0.043)	Loss -7.1540e-01 (-8.5031e-01)	Acc@1  87.50 ( 95.20)	Acc@5 100.00 ( 99.76)
+
+Epoch: [4][157/157]	Time  0.171 ( 0.511)	Data  0.005 ( 0.043)	Loss -1.1011e+00 (-9.9198e-01)	Acc@1  87.50 ( 95.58)	Acc@5 100.00 ( 99.90)
+
+Epoch: [5][157/157]	Time  0.187 ( 0.511)	Data  0.004 ( 0.044)	Loss -1.1216e+00 (-1.0731e+00)	Acc@1 100.00 ( 96.02)	Acc@5 100.00 ( 99.90)
+
+ *   Acc@1 70.800 Acc@5 95.200
+ *   Acc@1 67.900 Acc@5 91.900
+ *   Acc@1 84.100 Acc@5 95.100
+ *   Acc@1 75.600 Acc@5 91.900
+ *   Acc@1 69.000 Acc@5 90.600
+ *   Acc@1 75.000 Acc@5 93.100
+ *   Acc@1 74.200 Acc@5 91.400
+ *   Acc@1 73.300 Acc@5 89.900
+ *   Acc@1 81.400 Acc@5 96.800
+ *   Acc@1 75.900 Acc@5 92.100
+
+Selection :  [173688.0, 150936.0, 149256.0, 151752.0, 149744.0, 169472.0, 154312.0, 150832.0, 0.0, 8.0]
+Done
+Using custom criterion, please specify the loss_fn in the model
+{'model': <class 'models.CertL2P.CertL2P'>, 'criterion': 'custom', 'optimizer': <class 'torch.optim.adam.Adam'>, 'scheduler': <class 'torch.optim.lr_scheduler.ConstantLR'>, 'batch_size': 32, 'step_size': 128, 'epochs': 5, 'log_frequency': 1, 'num_tasks': 10, 'task_governor': 'CIL', 'num_workers': 4, 'dataset': <class 'torchvision.datasets.cifar.CIFAR100'>, 'dataset_path': '/home/moonjunyyy/dataset/', 'save_path': 'saved/dualprompt', 'seed': 42, 'device': 'cuda', 'pin_mem': False, 'use_amp': False, 'debug': False, 'world_size': 1, 'rank': 0, 'dist_url': 'env://', 'dist_backend': 'nccl', 'local_rank': 0, 'model_args': {'backbone_name': 'vit_base_patch16_224_l2p', 'pool_size': 10, 'selection_size': 5, 'prompt_len': 5, 'selection_layer': [3, 6, 9], 'reserve_rate': 0.7, 'lambda': 0.5, '_cls_at_front': True, '_batchwise_selection': True, '_mixed_prompt_order': False, '_mixed_prompt_token': False, '_learnable_pos_emb': False, 'class_num': 100}, 'optimizer_args': {'lr': 0.001, 'betas': (0.9, 0.999), 'eps': 1e-08, 'weight_decay': 0, 'amsgrad': False}, 'scheduler_args': {'factor': 1, 'total_iters': 100, 'last_epoch': -1}}
+Files already downloaded and verified
+Files already downloaded and verified
+You have chosen to seed training. This will turn on the CUDNN deterministic setting, which can slow down your training considerably! You may see unexpected behavior when restarting from checkpoints.
+Building model...
+Total Parameters :	86072932
+Learnable Parameters :	122980
+
+Selection :  [0, 0, 0, 0, 0, 0, 0, 0, 0, 0]
+Training for task 0 : [42, 96, 62, 98, 46, 95, 60, 24, 78, 16]
+Epoch: [1][157/157]	Time  0.223 ( 0.460)	Data  0.004 ( 0.043)	Loss 1.3118e+00 (1.8341e+00)	Acc@1 100.00 ( 76.06)	Acc@5 100.00 ( 94.12)
+
+Epoch: [2][157/157]	Time  0.160 ( 0.447)	Data  0.005 ( 0.043)	Loss 8.4029e-01 (1.0824e+00)	Acc@1 100.00 ( 91.20)	Acc@5 100.00 ( 99.46)
+
+Epoch: [3][157/157]	Time  0.155 ( 0.446)	Data  0.006 ( 0.043)	Loss 3.0399e-01 (6.5217e-01)	Acc@1 100.00 ( 92.16)	Acc@5 100.00 ( 99.62)
+
+Epoch: [4][157/157]	Time  0.155 ( 0.446)	Data  0.004 ( 0.043)	Loss 2.5942e-01 (4.0668e-01)	Acc@1 100.00 ( 92.54)	Acc@5 100.00 ( 99.66)
+
+Epoch: [5][157/157]	Time  0.162 ( 0.447)	Data  0.011 ( 0.044)	Loss 3.7954e-01 (2.3976e-01)	Acc@1  87.50 ( 93.00)	Acc@5 100.00 ( 99.68)
+
+ *   Acc@1 93.100 Acc@5 99.000
+
+Selection :  [24840, 936, 64, 25000, 24904, 160, 24704, 24392, 0, 0]
+Training for task 1 : [68, 70, 11, 13, 97, 52, 99, 19, 71, 10]
+Epoch: [1][157/157]	Time  0.157 ( 0.445)	Data  0.004 ( 0.043)	Loss 1.3142e+00 (1.6384e+00)	Acc@1  87.50 ( 78.68)	Acc@5 100.00 ( 93.94)
+
+Epoch: [2][157/157]	Time  0.161 ( 0.446)	Data  0.004 ( 0.043)	Loss 6.5071e-01 (9.1933e-01)	Acc@1 100.00 ( 93.08)	Acc@5 100.00 ( 99.42)
+
+Epoch: [3][157/157]	Time  0.154 ( 0.446)	Data  0.007 ( 0.043)	Loss 1.4066e-01 (5.2318e-01)	Acc@1 100.00 ( 93.48)	Acc@5 100.00 ( 99.46)
+
+Epoch: [4][157/157]	Time  0.153 ( 0.445)	Data  0.004 ( 0.043)	Loss 1.4366e-01 (2.7275e-01)	Acc@1 100.00 ( 94.22)	Acc@5 100.00 ( 99.56)
+
+Epoch: [5][157/157]	Time  0.163 ( 0.447)	Data  0.004 ( 0.043)	Loss -8.6717e-02 (1.0883e-01)	Acc@1 100.00 ( 94.62)	Acc@5 100.00 ( 99.66)
+
+ *   Acc@1 82.400 Acc@5 97.900
+ *   Acc@1 83.000 Acc@5 97.700
+
+Selection :  [31472, 25936, 22536, 47568, 26728, 23912, 25512, 28936, 0, 17400]
+Training for task 2 : [89, 86, 18, 40, 5, 38, 9, 82, 83, 43]
+Epoch: [1][157/157]	Time  0.157 ( 0.445)	Data  0.004 ( 0.043)	Loss 1.0434e+00 (1.5113e+00)	Acc@1 100.00 ( 76.56)	Acc@5 100.00 ( 93.88)
+
+Epoch: [2][157/157]	Time  0.159 ( 0.447)	Data  0.004 ( 0.044)	Loss 1.3413e-01 (7.4752e-01)	Acc@1 100.00 ( 91.66)	Acc@5 100.00 ( 99.22)
+
+Epoch: [3][157/157]	Time  0.160 ( 0.446)	Data  0.004 ( 0.044)	Loss 6.0136e-01 (3.4998e-01)	Acc@1  75.00 ( 92.26)	Acc@5 100.00 ( 99.54)
+
+Epoch: [4][157/157]	Time  0.161 ( 0.446)	Data  0.004 ( 0.043)	Loss -1.6823e-01 (1.2066e-01)	Acc@1 100.00 ( 92.52)	Acc@5 100.00 ( 99.60)
+
+Epoch: [5][157/157]	Time  0.164 ( 0.446)	Data  0.004 ( 0.043)	Loss -3.2088e-01 (-3.5695e-02)	Acc@1 100.00 ( 92.86)	Acc@5 100.00 ( 99.70)
+
+ *   Acc@1 80.200 Acc@5 96.500
+ *   Acc@1 77.900 Acc@5 97.100
+ *   Acc@1 82.700 Acc@5 95.900
+
+Selection :  [56304, 30976, 24624, 47792, 49288, 24040, 45800, 53840, 0, 42336]
+Training for task 3 : [32, 94, 67, 93, 75, 59, 79, 1, 50, 73]
+Epoch: [1][157/157]	Time  0.161 ( 0.446)	Data  0.005 ( 0.044)	Loss 1.1186e+00 (1.4850e+00)	Acc@1  87.50 ( 70.44)	Acc@5  87.50 ( 91.76)
+
+Epoch: [2][157/157]	Time  0.163 ( 0.446)	Data  0.011 ( 0.043)	Loss 8.2062e-01 (7.9699e-01)	Acc@1  75.00 ( 85.30)	Acc@5  87.50 ( 97.82)
+
+Epoch: [3][157/157]	Time  0.160 ( 0.446)	Data  0.004 ( 0.043)	Loss 1.2466e-01 (4.1145e-01)	Acc@1  75.00 ( 86.78)	Acc@5 100.00 ( 98.18)
+
+Epoch: [4][157/157]	Time  0.159 ( 0.446)	Data  0.005 ( 0.043)	Loss -1.2370e-01 (1.8825e-01)	Acc@1 100.00 ( 87.54)	Acc@5 100.00 ( 98.60)
+
+Epoch: [5][157/157]	Time  0.161 ( 0.446)	Data  0.005 ( 0.043)	Loss -2.2975e-01 (4.2833e-02)	Acc@1 100.00 ( 88.02)	Acc@5 100.00 ( 98.86)
+
+ *   Acc@1 79.000 Acc@5 96.600
+ *   Acc@1 78.900 Acc@5 96.100
+ *   Acc@1 80.000 Acc@5 94.800
+ *   Acc@1 73.200 Acc@5 91.800
+
+Selection :  [56336, 55976, 49560, 68920, 56952, 47432, 68616, 53840, 0, 42368]
+Training for task 4 : [66, 45, 63, 58, 22, 3, 87, 4, 61, 51]
+Epoch: [1][157/157]	Time  0.155 ( 0.445)	Data  0.004 ( 0.044)	Loss 8.5358e-01 (1.3024e+00)	Acc@1 100.00 ( 71.84)	Acc@5 100.00 ( 92.72)
+
+Epoch: [2][157/157]	Time  0.160 ( 0.446)	Data  0.006 ( 0.043)	Loss 1.9459e-01 (6.1815e-01)	Acc@1  75.00 ( 86.70)	Acc@5 100.00 ( 98.68)
+
+Epoch: [3][157/157]	Time  0.161 ( 0.447)	Data  0.004 ( 0.044)	Loss -9.3060e-02 (2.3264e-01)	Acc@1 100.00 ( 87.68)	Acc@5 100.00 ( 99.00)
+
+Epoch: [4][157/157]	Time  0.161 ( 0.447)	Data  0.004 ( 0.043)	Loss -2.0934e-01 (7.0063e-03)	Acc@1 100.00 ( 88.64)	Acc@5 100.00 ( 99.24)
+
+Epoch: [5][157/157]	Time  0.161 ( 0.447)	Data  0.009 ( 0.044)	Loss -5.8421e-01 (-1.4138e-01)	Acc@1 100.00 ( 89.56)	Acc@5 100.00 ( 99.44)
+
+ *   Acc@1 79.200 Acc@5 96.800
+ *   Acc@1 77.400 Acc@5 95.700
+ *   Acc@1 81.300 Acc@5 93.500
+ *   Acc@1 73.800 Acc@5 91.900
+ *   Acc@1 71.100 Acc@5 90.700
+
+Selection :  [80984, 59992, 74424, 71832, 81888, 47688, 68680, 72656, 0, 66856]
+Training for task 5 : [12, 74, 21, 20, 6, 35, 44, 48, 37, 33]
+Epoch: [1][157/157]	Time  0.157 ( 0.445)	Data  0.004 ( 0.043)	Loss 9.2700e-01 (1.1766e+00)	Acc@1 100.00 ( 75.08)	Acc@5 100.00 ( 92.96)
+
+Epoch: [2][157/157]	Time  0.160 ( 0.446)	Data  0.004 ( 0.044)	Loss -2.7053e-03 (4.5042e-01)	Acc@1 100.00 ( 89.10)	Acc@5 100.00 ( 99.12)
+
+Epoch: [3][157/157]	Time  0.159 ( 0.445)	Data  0.004 ( 0.043)	Loss -3.5884e-01 (7.3118e-02)	Acc@1 100.00 ( 90.36)	Acc@5 100.00 ( 99.24)
+
+Epoch: [4][157/157]	Time  0.159 ( 0.446)	Data  0.005 ( 0.044)	Loss -4.9612e-01 (-1.3711e-01)	Acc@1 100.00 ( 91.28)	Acc@5 100.00 ( 99.32)
+
+Epoch: [5][157/157]	Time  0.163 ( 0.446)	Data  0.013 ( 0.044)	Loss -3.2440e-01 (-2.7076e-01)	Acc@1 100.00 ( 91.70)	Acc@5 100.00 ( 99.46)
+
+ *   Acc@1 77.900 Acc@5 95.300
+ *   Acc@1 74.900 Acc@5 95.000
+ *   Acc@1 80.800 Acc@5 93.300
+ *   Acc@1 70.600 Acc@5 89.400
+ *   Acc@1 67.400 Acc@5 87.700
+ *   Acc@1 72.300 Acc@5 93.800
+
+Selection :  [80984, 84992, 74520, 96800, 81920, 72688, 93424, 97592, 0, 67080]
+Training for task 6 : [15, 88, 31, 69, 27, 81, 85, 56, 7, 65]
+Epoch: [1][157/157]	Time  0.164 ( 0.445)	Data  0.005 ( 0.044)	Loss 3.6798e-01 (1.0757e+00)	Acc@1 100.00 ( 77.44)	Acc@5 100.00 ( 93.30)
+
+Epoch: [2][157/157]	Time  0.154 ( 0.446)	Data  0.004 ( 0.044)	Loss 4.5680e-01 (3.2028e-01)	Acc@1  62.50 ( 90.28)	Acc@5 100.00 ( 98.64)
+
+Epoch: [3][157/157]	Time  0.162 ( 0.447)	Data  0.004 ( 0.045)	Loss -2.2585e-02 (-4.0891e-02)	Acc@1  75.00 ( 91.02)	Acc@5 100.00 ( 98.88)
+
+Epoch: [4][157/157]	Time  0.159 ( 0.445)	Data  0.005 ( 0.044)	Loss -2.3490e-01 (-2.3111e-01)	Acc@1  75.00 ( 91.34)	Acc@5 100.00 ( 99.02)
+
+Epoch: [5][157/157]	Time  0.160 ( 0.446)	Data  0.004 ( 0.044)	Loss -2.7266e-01 (-3.5545e-01)	Acc@1  87.50 ( 92.14)	Acc@5 100.00 ( 99.22)
+
+ *   Acc@1 77.300 Acc@5 95.900
+ *   Acc@1 73.900 Acc@5 95.300
+ *   Acc@1 80.800 Acc@5 93.200
+ *   Acc@1 72.800 Acc@5 89.900
+ *   Acc@1 68.500 Acc@5 88.700
+ *   Acc@1 73.000 Acc@5 92.700
+ *   Acc@1 70.100 Acc@5 89.400
+
+Selection :  [102848, 109576, 99456, 96800, 87936, 95864, 93424, 97592, 0, 91504]
+Training for task 7 : [47, 41, 29, 80, 57, 84, 36, 17, 34, 72]
+Epoch: [1][157/157]	Time  0.157 ( 0.445)	Data  0.004 ( 0.044)	Loss 3.8069e-01 (9.7872e-01)	Acc@1 100.00 ( 79.16)	Acc@5 100.00 ( 94.82)
+
+Epoch: [2][157/157]	Time  0.165 ( 0.446)	Data  0.004 ( 0.043)	Loss -5.9949e-02 (2.2121e-01)	Acc@1  87.50 ( 91.68)	Acc@5 100.00 ( 99.10)
+
+Epoch: [3][157/157]	Time  0.156 ( 0.446)	Data  0.004 ( 0.044)	Loss -2.8915e-01 (-1.5681e-01)	Acc@1  87.50 ( 92.42)	Acc@5 100.00 ( 99.30)
+
+Epoch: [4][157/157]	Time  0.162 ( 0.447)	Data  0.004 ( 0.044)	Loss -4.6321e-01 (-3.5350e-01)	Acc@1 100.00 ( 93.12)	Acc@5 100.00 ( 99.40)
+
+Epoch: [5][157/157]	Time  0.163 ( 0.447)	Data  0.006 ( 0.044)	Loss -6.4537e-01 (-4.7506e-01)	Acc@1 100.00 ( 93.68)	Acc@5 100.00 ( 99.58)
+
+ *   Acc@1 76.100 Acc@5 95.500
+ *   Acc@1 73.100 Acc@5 94.200
+ *   Acc@1 79.200 Acc@5 93.000
+ *   Acc@1 71.200 Acc@5 90.300
+ *   Acc@1 67.200 Acc@5 88.100
+ *   Acc@1 71.200 Acc@5 91.900
+ *   Acc@1 67.400 Acc@5 88.300
+ *   Acc@1 75.700 Acc@5 91.100
+
+Selection :  [105456, 109576, 99456, 121768, 112936, 96472, 118168, 122392, 0, 113776]
+Training for task 8 : [2, 91, 8, 53, 30, 90, 26, 23, 54, 76]
+Epoch: [1][157/157]	Time  0.162 ( 0.444)	Data  0.004 ( 0.044)	Loss 5.2057e-01 (9.0484e-01)	Acc@1  75.00 ( 80.74)	Acc@5  87.50 ( 94.50)
+
+Epoch: [2][157/157]	Time  0.155 ( 0.446)	Data  0.005 ( 0.044)	Loss -4.5950e-01 (1.1041e-01)	Acc@1 100.00 ( 93.72)	Acc@5 100.00 ( 99.32)
+
+Epoch: [3][157/157]	Time  0.159 ( 0.445)	Data  0.004 ( 0.044)	Loss -3.5903e-01 (-2.7092e-01)	Acc@1 100.00 ( 94.58)	Acc@5 100.00 ( 99.58)
+
+Epoch: [4][157/157]	Time  0.158 ( 0.446)	Data  0.004 ( 0.044)	Loss -3.8697e-01 (-4.6385e-01)	Acc@1 100.00 ( 95.10)	Acc@5 100.00 ( 99.74)
+
+Epoch: [5][157/157]	Time  0.158 ( 0.446)	Data  0.004 ( 0.044)	Loss -5.3744e-01 (-5.7829e-01)	Acc@1  87.50 ( 95.56)	Acc@5 100.00 ( 99.78)
+
+ *   Acc@1 74.400 Acc@5 95.300
+ *   Acc@1 72.000 Acc@5 94.000
+ *   Acc@1 79.400 Acc@5 92.200
+ *   Acc@1 70.200 Acc@5 89.500
+ *   Acc@1 66.400 Acc@5 87.500
+ *   Acc@1 71.800 Acc@5 91.700
+ *   Acc@1 65.500 Acc@5 88.200
+ *   Acc@1 73.800 Acc@5 90.500
+ *   Acc@1 80.500 Acc@5 95.100
+
+Selection :  [130456, 134576, 124456, 121864, 137840, 121472, 118168, 122392, 0, 113776]
+Training for task 9 : [14, 55, 0, 64, 77, 39, 25, 92, 49, 28]
+Epoch: [1][157/157]	Time  0.164 ( 0.446)	Data  0.005 ( 0.044)	Loss 5.6392e-01 (8.9500e-01)	Acc@1 100.00 ( 78.48)	Acc@5 100.00 ( 94.16)
+
+Epoch: [2][157/157]	Time  0.154 ( 0.445)	Data  0.007 ( 0.044)	Loss 2.9797e-02 (1.5585e-01)	Acc@1  87.50 ( 90.70)	Acc@5 100.00 ( 98.72)
+
+Epoch: [3][157/157]	Time  0.156 ( 0.445)	Data  0.004 ( 0.043)	Loss 1.6309e-01 (-1.8273e-01)	Acc@1  75.00 ( 91.56)	Acc@5 100.00 ( 99.04)
+
+Epoch: [4][157/157]	Time  0.162 ( 0.446)	Data  0.005 ( 0.044)	Loss -7.0797e-01 (-3.5996e-01)	Acc@1 100.00 ( 92.16)	Acc@5 100.00 ( 99.22)
+
+Epoch: [5][157/157]	Time  0.155 ( 0.446)	Data  0.007 ( 0.044)	Loss -6.5271e-01 (-4.7298e-01)	Acc@1 100.00 ( 92.74)	Acc@5 100.00 ( 99.24)
+
+ *   Acc@1 72.600 Acc@5 94.900
+ *   Acc@1 70.300 Acc@5 93.500
+ *   Acc@1 79.600 Acc@5 92.300
+ *   Acc@1 70.300 Acc@5 88.100
+ *   Acc@1 65.800 Acc@5 87.800
+ *   Acc@1 69.000 Acc@5 91.000
+ *   Acc@1 65.500 Acc@5 86.200
+ *   Acc@1 72.100 Acc@5 89.600
+ *   Acc@1 78.900 Acc@5 94.500
+ *   Acc@1 72.300 Acc@5 89.800
+
+Selection :  [134296.0, 134576.0, 124456.0, 146864.0, 137840.0, 145960.0, 140000.0, 147264.0, 0.0, 138744.0]
+DoneUsing custom criterion, please specify the loss_fn in the model
+{'model': <class 'models.EL2P.EL2P'>, 'criterion': 'custom', 'optimizer': <class 'torch.optim.adam.Adam'>, 'scheduler': <class 'torch.optim.lr_scheduler.ConstantLR'>, 'batch_size': 32, 'step_size': 128, 'epochs': 5, 'log_frequency': 1, 'num_tasks': 10, 'task_governor': 'CIL', 'num_workers': 4, 'dataset': <class 'torchvision.datasets.cifar.CIFAR100'>, 'dataset_path': '/home/moonjunyyy/dataset/', 'save_path': 'saved/dualprompt', 'seed': 42, 'device': 'cuda', 'pin_mem': False, 'use_amp': False, 'debug': False, 'world_size': 1, 'rank': 0, 'dist_url': 'env://', 'dist_backend': 'nccl', 'local_rank': 0, 'model_args': {'backbone_name': 'vit_base_patch16_224_l2p', 'pool_size': 10, 'selection_size': 5, 'prompt_len': 5, 'selection_layer': [3, 6, 9], 'reserve_rate': 0.7, 'lambda': 0.5, '_cls_at_front': True, '_batchwise_selection': True, '_mixed_prompt_order': False, '_mixed_prompt_token': False, '_learnable_pos_emb': False, 'class_num': 100}, 'optimizer_args': {'lr': 0.001, 'betas': (0.9, 0.999), 'eps': 1e-08, 'weight_decay': 0, 'amsgrad': False}, 'scheduler_args': {'factor': 1, 'total_iters': 100, 'last_epoch': -1}}
+Files already downloaded and verified
+Files already downloaded and verified
+You have chosen to seed training. This will turn on the CUDNN deterministic setting, which can slow down your training considerably! You may see unexpected behavior when restarting from checkpoints.
+Building model...
+Total Parameters :	86072932
+Learnable Parameters :	122980
+
+Selection :  [0, 0, 0, 0, 0, 0, 0, 0, 0, 0]
+Training for task 0 : [42, 96, 62, 98, 46, 95, 60, 24, 78, 16]
+Using custom criterion, please specify the loss_fn in the model
+{'model': <class 'models.EL2P.EL2P'>, 'criterion': 'custom', 'optimizer': <class 'torch.optim.adam.Adam'>, 'scheduler': <class 'torch.optim.lr_scheduler.ConstantLR'>, 'batch_size': 32, 'step_size': 128, 'epochs': 5, 'log_frequency': 1, 'num_tasks': 10, 'task_governor': 'CIL', 'num_workers': 4, 'dataset': <class 'torchvision.datasets.cifar.CIFAR100'>, 'dataset_path': '/home/moonjunyyy/dataset/', 'save_path': 'saved/dualprompt', 'seed': 42, 'device': 'cuda', 'pin_mem': False, 'use_amp': False, 'debug': False, 'world_size': 1, 'rank': 0, 'dist_url': 'env://', 'dist_backend': 'nccl', 'local_rank': 0, 'model_args': {'backbone_name': 'vit_base_patch16_224_l2p', 'pool_size': 10, 'selection_size': 5, 'prompt_len': 5, 'selection_layer': [3, 6, 9], 'reserve_rate': 0.7, 'lambda': 0.5, '_cls_at_front': True, '_batchwise_selection': True, '_mixed_prompt_order': False, '_mixed_prompt_token': False, '_learnable_pos_emb': False, 'class_num': 100}, 'optimizer_args': {'lr': 0.001, 'betas': (0.9, 0.999), 'eps': 1e-08, 'weight_decay': 0, 'amsgrad': False}, 'scheduler_args': {'factor': 1, 'total_iters': 100, 'last_epoch': -1}}
+Files already downloaded and verified
+Files already downloaded and verified
+You have chosen to seed training. This will turn on the CUDNN deterministic setting, which can slow down your training considerably! You may see unexpected behavior when restarting from checkpoints.
+Building model...
+Total Parameters :	86072932
+Learnable Parameters :	122980
+
+Selection :  [0, 0, 0, 0, 0, 0, 0, 0, 0, 0]
+Training for task 0 : [42, 96, 62, 98, 46, 95, 60, 24, 78, 16]
+Using custom criterion, please specify the loss_fn in the model
+{'model': <class 'models.EL2P.EL2P'>, 'criterion': 'custom', 'optimizer': <class 'torch.optim.adam.Adam'>, 'scheduler': <class 'torch.optim.lr_scheduler.ConstantLR'>, 'batch_size': 32, 'step_size': 128, 'epochs': 5, 'log_frequency': 1, 'num_tasks': 10, 'task_governor': 'CIL', 'num_workers': 4, 'dataset': <class 'torchvision.datasets.cifar.CIFAR100'>, 'dataset_path': '/home/moonjunyyy/dataset/', 'save_path': 'saved/dualprompt', 'seed': 42, 'device': 'cuda', 'pin_mem': False, 'use_amp': False, 'debug': False, 'world_size': 1, 'rank': 0, 'dist_url': 'env://', 'dist_backend': 'nccl', 'local_rank': 0, 'model_args': {'backbone_name': 'vit_base_patch16_224_l2p', 'pool_size': 10, 'selection_size': 5, 'prompt_len': 5, 'selection_layer': [3, 6, 9], 'reserve_rate': 0.7, 'lambda': 0.5, '_cls_at_front': True, '_batchwise_selection': True, '_mixed_prompt_order': False, '_mixed_prompt_token': False, '_learnable_pos_emb': False, 'class_num': 100}, 'optimizer_args': {'lr': 0.001, 'betas': (0.9, 0.999), 'eps': 1e-08, 'weight_decay': 0, 'amsgrad': False}, 'scheduler_args': {'factor': 1, 'total_iters': 100, 'last_epoch': -1}}
+Files already downloaded and verified
+Files already downloaded and verified
+You have chosen to seed training. This will turn on the CUDNN deterministic setting, which can slow down your training considerably! You may see unexpected behavior when restarting from checkpoints.
+Building model...
+Total Parameters :	86072932
+Learnable Parameters :	122980
+
+Selection :  [0, 0, 0, 0, 0, 0, 0, 0, 0, 0]
+Training for task 0 : [42, 96, 62, 98, 46, 95, 60, 24, 78, 16]
+Using custom criterion, please specify the loss_fn in the model
+{'model': <class 'models.EL2P.EL2P'>, 'criterion': 'custom', 'optimizer': <class 'torch.optim.adam.Adam'>, 'scheduler': <class 'torch.optim.lr_scheduler.ConstantLR'>, 'batch_size': 32, 'step_size': 128, 'epochs': 5, 'log_frequency': 1, 'num_tasks': 10, 'task_governor': 'CIL', 'num_workers': 4, 'dataset': <class 'torchvision.datasets.cifar.CIFAR100'>, 'dataset_path': '/home/moonjunyyy/dataset/', 'save_path': 'saved/dualprompt', 'seed': 42, 'device': 'cuda', 'pin_mem': False, 'use_amp': False, 'debug': False, 'world_size': 1, 'rank': 0, 'dist_url': 'env://', 'dist_backend': 'nccl', 'local_rank': 0, 'model_args': {'backbone_name': 'vit_base_patch16_224_l2p', 'pool_size': 10, 'selection_size': 5, 'prompt_len': 5, 'selection_layer': [3, 6, 9], 'reserve_rate': 0.7, 'lambda': 0.5, '_cls_at_front': True, '_batchwise_selection': True, '_mixed_prompt_order': False, '_mixed_prompt_token': False, '_learnable_pos_emb': False, 'class_num': 100}, 'optimizer_args': {'lr': 0.001, 'betas': (0.9, 0.999), 'eps': 1e-08, 'weight_decay': 0, 'amsgrad': False}, 'scheduler_args': {'factor': 1, 'total_iters': 100, 'last_epoch': -1}}
+Files already downloaded and verified
+Files already downloaded and verified
+You have chosen to seed training. This will turn on the CUDNN deterministic setting, which can slow down your training considerably! You may see unexpected behavior when restarting from checkpoints.
+Building model...
+Total Parameters :	86072932
+Learnable Parameters :	122980
+
+Selection :  [0, 0, 0, 0, 0, 0, 0, 0, 0, 0]
+Training for task 0 : [42, 96, 62, 98, 46, 95, 60, 24, 78, 16]
+Epoch: [1][157/157]	Time  0.261 ( 0.531)	Data  0.005 ( 0.044)	Loss 1.3625e+00 (1.6719e+00)	Acc@1  75.00 ( 75.96)	Acc@5 100.00 ( 94.42)
+
+Epoch: [2][157/157]	Time  0.191 ( 0.519)	Data  0.007 ( 0.044)	Loss 4.3700e-01 (7.7260e-01)	Acc@1 100.00 ( 89.72)	Acc@5 100.00 ( 99.22)
+
+Epoch: [3][157/157]	Time  0.186 ( 0.519)	Data  0.006 ( 0.044)	Loss -1.0252e-01 (3.4585e-01)	Acc@1 100.00 ( 91.48)	Acc@5 100.00 ( 99.46)
+
+Epoch: [4][157/157]	Time  0.184 ( 0.520)	Data  0.004 ( 0.044)	Loss -1.4198e-01 (1.1981e-01)	Acc@1 100.00 ( 92.56)	Acc@5 100.00 ( 99.56)
+
+Epoch: [5][157/157]	Time  0.183 ( 0.520)	Data  0.006 ( 0.044)	Loss -4.8122e-02 (-3.6326e-02)	Acc@1  87.50 ( 93.56)	Acc@5 100.00 ( 99.74)
+
+ *   Acc@1 93.000 Acc@5 99.000
+
+Selection :  [25000, 24936, 384, 25000, 24680, 0, 0, 25000, 0, 0]
+Training for task 1 : [68, 70, 11, 13, 97, 52, 99, 19, 71, 10]
+Epoch: [1][157/157]	Time  0.182 ( 0.520)	Data  0.004 ( 0.044)	Loss 7.8322e-01 (1.2969e+00)	Acc@1  87.50 ( 78.84)	Acc@5 100.00 ( 94.60)
+
+Epoch: [2][157/157]	Time  0.184 ( 0.539)	Data  0.004 ( 0.044)	Loss 2.2865e-01 (3.5420e-01)	Acc@1  87.50 ( 93.08)	Acc@5 100.00 ( 99.48)
+
+Epoch: [3][157/157]	Time  0.204 ( 0.531)	Data  0.014 ( 0.046)	Loss 6.5491e-02 (-4.1240e-02)	Acc@1 100.00 ( 94.42)	Acc@5 100.00 ( 99.60)
+
+Epoch: [4][157/157]	Time  0.182 ( 0.520)	Data  0.004 ( 0.045)	Loss -3.2643e-01 (-2.4414e-01)	Acc@1 100.00 ( 95.26)	Acc@5 100.00 ( 99.64)
+
+Epoch: [5][157/157]	Time  0.199 ( 0.525)	Data  0.005 ( 0.044)	Loss -3.9496e-01 (-3.8113e-01)	Acc@1 100.00 ( 96.04)	Acc@5 100.00 ( 99.78)
+
+ *   Acc@1 82.000 Acc@5 98.800
+ *   Acc@1 84.200 Acc@5 98.800
+
+Selection :  [49896, 49872, 25320, 49992, 24904, 0, 16, 50000, 0, 0]
+Training for task 2 : [89, 86, 18, 40, 5, 38, 9, 82, 83, 43]
+Epoch: [1][157/157]	Time  0.190 ( 0.526)	Data  0.010 ( 0.046)	Loss 4.5343e-01 (1.0241e+00)	Acc@1 100.00 ( 79.58)	Acc@5 100.00 ( 94.58)
+
+Epoch: [2][157/157]	Time  0.186 ( 0.521)	Data  0.004 ( 0.044)	Loss -2.8495e-01 (1.0114e-01)	Acc@1 100.00 ( 93.74)	Acc@5 100.00 ( 99.70)
+
+Epoch: [3][157/157]	Time  0.182 ( 0.538)	Data  0.005 ( 0.048)	Loss -4.6194e-01 (-2.8147e-01)	Acc@1  87.50 ( 94.74)	Acc@5 100.00 ( 99.82)
+
+Epoch: [4][157/157]	Time  0.188 ( 0.531)	Data  0.005 ( 0.046)	Loss -3.2435e-01 (-4.6686e-01)	Acc@1 100.00 ( 95.48)	Acc@5 100.00 ( 99.88)
+
+Epoch: [5][157/157]	Time  0.180 ( 0.526)	Data  0.004 ( 0.045)	Loss -6.7970e-01 (-4.2712e-01)	Acc@1 100.00 ( 95.58)	Acc@5 100.00 ( 99.84)
+
+ *   Acc@1 82.700 Acc@5 97.700
+ *   Acc@1 80.200 Acc@5 97.900
+ *   Acc@1 88.400 Acc@5 97.900
+
+Selection :  [70648, 50904, 49680, 74928, 49840, 72, 4312, 74616, 0, 0]
+Training for task 3 : [32, 94, 67, 93, 75, 59, 79, 1, 50, 73]
+Epoch: [1][157/157]	Time  0.190 ( 0.525)	Data  0.009 ( 0.045)	Loss 9.1010e-01 (1.0716e+00)	Acc@1  75.00 ( 73.38)	Acc@5 100.00 ( 93.48)
+
+Epoch: [2][157/157]	Time  0.173 ( 0.531)	Data  0.004 ( 0.046)	Loss 5.8799e-01 (3.8534e-01)	Acc@1  62.50 ( 86.24)	Acc@5 100.00 ( 98.64)
+
+Epoch: [3][157/157]	Time  0.196 ( 0.526)	Data  0.004 ( 0.044)	Loss -9.7294e-02 (3.5239e-02)	Acc@1  75.00 ( 88.86)	Acc@5 100.00 ( 99.12)
+
+Epoch: [4][157/157]	Time  0.178 ( 0.520)	Data  0.005 ( 0.046)	Loss -5.1086e-01 (-1.7021e-01)	Acc@1 100.00 ( 90.02)	Acc@5 100.00 ( 99.36)
+
+Epoch: [5][157/157]	Time  0.182 ( 0.511)	Data  0.010 ( 0.044)	Loss -5.8174e-01 (-3.0837e-01)	Acc@1 100.00 ( 91.20)	Acc@5 100.00 ( 99.60)
+
+ *   Acc@1 78.200 Acc@5 97.600
+ *   Acc@1 79.000 Acc@5 97.300
+ *   Acc@1 86.100 Acc@5 97.200
+ *   Acc@1 81.400 Acc@5 96.100
+
+Selection :  [73656, 75904, 74264, 76784, 74776, 19472, 29312, 75832, 0, 0]
+Training for task 4 : [66, 45, 63, 58, 22, 3, 87, 4, 61, 51]
+Epoch: [1][157/157]	Time  0.175 ( 0.508)	Data  0.004 ( 0.043)	Loss 5.3256e-01 (9.8608e-01)	Acc@1 100.00 ( 73.02)	Acc@5 100.00 ( 93.72)
+
+Epoch: [2][157/157]	Time  0.200 ( 0.514)	Data  0.012 ( 0.044)	Loss -9.8888e-02 (1.5229e-01)	Acc@1 100.00 ( 87.40)	Acc@5 100.00 ( 99.22)
+
+Epoch: [3][157/157]	Time  0.174 ( 0.519)	Data  0.004 ( 0.044)	Loss -5.5720e-01 (-2.3017e-01)	Acc@1  87.50 ( 89.18)	Acc@5 100.00 ( 99.56)
+
+Epoch: [4][157/157]	Time  0.197 ( 0.522)	Data  0.005 ( 0.044)	Loss -4.5373e-01 (-4.3020e-01)	Acc@1 100.00 ( 90.78)	Acc@5 100.00 ( 99.74)
+
+Epoch: [5][157/157]	Time  0.189 ( 0.526)	Data  0.004 ( 0.047)	Loss -8.1309e-01 (-5.5947e-01)	Acc@1 100.00 ( 91.76)	Acc@5 100.00 ( 99.82)
+
+ *   Acc@1 75.600 Acc@5 97.700
+ *   Acc@1 76.200 Acc@5 97.700
+ *   Acc@1 87.100 Acc@5 96.200
+ *   Acc@1 83.100 Acc@5 95.300
+ *   Acc@1 77.900 Acc@5 94.600
+
+Selection :  [98656, 75904, 74264, 101784, 74776, 44472, 54312, 100832, 0, 0]
+Training for task 5 : [12, 74, 21, 20, 6, 35, 44, 48, 37, 33]
+Epoch: [1][157/157]	Time  0.189 ( 0.517)	Data  0.005 ( 0.045)	Loss 3.6431e-01 (7.5915e-01)	Acc@1 100.00 ( 82.62)	Acc@5 100.00 ( 95.82)
+
+Epoch: [2][157/157]	Time  0.194 ( 0.523)	Data  0.005 ( 0.044)	Loss -5.6202e-01 (-1.6507e-01)	Acc@1 100.00 ( 93.80)	Acc@5 100.00 ( 99.64)
+
+Epoch: [3][157/157]	Time  0.187 ( 0.527)	Data  0.004 ( 0.045)	Loss -8.4467e-01 (-5.0862e-01)	Acc@1 100.00 ( 94.46)	Acc@5 100.00 ( 99.70)
+
+Epoch: [4][157/157]	Time  0.181 ( 0.527)	Data  0.005 ( 0.047)	Loss -5.5952e-01 (-6.6816e-01)	Acc@1 100.00 ( 94.96)	Acc@5 100.00 ( 99.82)
+
+Epoch: [5][157/157]	Time  0.181 ( 0.517)	Data  0.005 ( 0.045)	Loss -7.3647e-01 (-7.6967e-01)	Acc@1  87.50 ( 95.50)	Acc@5 100.00 ( 99.86)
+
+ *   Acc@1 72.500 Acc@5 96.200
+ *   Acc@1 72.200 Acc@5 96.500
+ *   Acc@1 87.000 Acc@5 96.500
+ *   Acc@1 79.700 Acc@5 94.300
+ *   Acc@1 77.100 Acc@5 93.500
+ *   Acc@1 80.800 Acc@5 95.900
+
+Selection :  [98688, 100904, 99256, 101784, 99744, 69472, 79312, 100832, 0, 8]
+Training for task 6 : [15, 88, 31, 69, 27, 81, 85, 56, 7, 65]
+Epoch: [1][157/157]	Time  0.173 ( 0.516)	Data  0.004 ( 0.044)	Loss -3.8863e-01 (4.7161e-01)	Acc@1 100.00 ( 83.84)	Acc@5 100.00 ( 95.64)
+
+Epoch: [2][157/157]	Time  0.184 ( 0.517)	Data  0.005 ( 0.045)	Loss -1.3162e-01 (-4.6359e-01)	Acc@1  75.00 ( 94.14)	Acc@5 100.00 ( 99.54)
+
+Epoch: [3][157/157]	Time  0.175 ( 0.521)	Data  0.004 ( 0.045)	Loss -7.1704e-01 (-7.5103e-01)	Acc@1  87.50 ( 95.04)	Acc@5 100.00 ( 99.68)
+
+Epoch: [4][157/157]	Time  0.189 ( 0.523)	Data  0.005 ( 0.045)	Loss -9.4437e-01 (-8.7811e-01)	Acc@1 100.00 ( 95.66)	Acc@5 100.00 ( 99.70)
+
+Epoch: [5][157/157]	Time  0.186 ( 0.521)	Data  0.004 ( 0.045)	Loss -8.2516e-01 (-9.5803e-01)	Acc@1 100.00 ( 96.26)	Acc@5 100.00 ( 99.78)
+
+ *   Acc@1 68.100 Acc@5 95.400
+ *   Acc@1 66.000 Acc@5 94.600
+ *   Acc@1 86.300 Acc@5 96.000
+ *   Acc@1 77.700 Acc@5 92.900
+ *   Acc@1 74.900 Acc@5 92.100
+ *   Acc@1 80.000 Acc@5 94.900
+ *   Acc@1 81.800 Acc@5 94.600
+
+Selection :  [123688, 100936, 99256, 126752, 99744, 94472, 104312, 125832, 0, 8]
+Training for task 7 : [47, 41, 29, 80, 57, 84, 36, 17, 34, 72]
+Epoch: [1][157/157]	Time  0.195 ( 0.514)	Data  0.006 ( 0.045)	Loss -1.9595e-01 (3.9064e-01)	Acc@1  87.50 ( 86.14)	Acc@5 100.00 ( 96.82)
+
+Epoch: [2][157/157]	Time  0.205 ( 0.527)	Data  0.006 ( 0.044)	Loss -6.8986e-01 (-5.4259e-01)	Acc@1 100.00 ( 95.94)	Acc@5 100.00 ( 99.76)
+
+Epoch: [3][157/157]	Time  0.192 ( 0.527)	Data  0.005 ( 0.046)	Loss -9.0206e-01 (-8.2870e-01)	Acc@1  87.50 ( 96.48)	Acc@5 100.00 ( 99.84)
+
+Epoch: [4][157/157]	Time  0.189 ( 0.528)	Data  0.006 ( 0.047)	Loss -8.9741e-01 (-9.5146e-01)	Acc@1 100.00 ( 96.74)	Acc@5 100.00 ( 99.88)
+
+Epoch: [5][157/157]	Time  0.185 ( 0.521)	Data  0.004 ( 0.047)	Loss -1.2518e+00 (-1.0266e+00)	Acc@1 100.00 ( 97.06)	Acc@5 100.00 ( 99.86)
+
+ *   Acc@1 66.600 Acc@5 93.700
+ *   Acc@1 64.600 Acc@5 92.200
+ *   Acc@1 84.900 Acc@5 95.500
+ *   Acc@1 77.100 Acc@5 92.000
+ *   Acc@1 72.700 Acc@5 92.400
+ *   Acc@1 78.600 Acc@5 95.000
+ *   Acc@1 82.100 Acc@5 93.600
+ *   Acc@1 78.800 Acc@5 92.900
+
+Selection :  [123688, 125936, 124256, 126752, 124744, 119472, 129312, 125832, 0, 8]
+Training for task 8 : [2, 91, 8, 53, 30, 90, 26, 23, 54, 76]
+Epoch: [1][157/157]	Time  0.180 ( 0.517)	Data  0.004 ( 0.045)	Loss -3.6619e-01 (2.3945e-01)	Acc@1  87.50 ( 85.06)	Acc@5 100.00 ( 96.24)
+
+Epoch: [2][157/157]	Time  0.182 ( 0.517)	Data  0.008 ( 0.046)	Loss -7.9629e-01 (-7.0826e-01)	Acc@1  87.50 ( 95.96)	Acc@5 100.00 ( 99.72)
+
+Epoch: [3][157/157]	Time  0.176 ( 0.518)	Data  0.004 ( 0.044)	Loss -9.5114e-01 (-1.0100e+00)	Acc@1  87.50 ( 96.54)	Acc@5 100.00 ( 99.90)
+
+Epoch: [4][157/157]	Time  0.186 ( 0.518)	Data  0.004 ( 0.045)	Loss -1.2043e+00 (-1.1320e+00)	Acc@1 100.00 ( 97.10)	Acc@5 100.00 ( 99.94)
+
+Epoch: [5][157/157]	Time  0.180 ( 0.516)	Data  0.004 ( 0.046)	Loss -1.2271e+00 (-1.2006e+00)	Acc@1 100.00 ( 97.32)	Acc@5 100.00 ( 99.94)
+
+ *   Acc@1 68.100 Acc@5 94.000
+ *   Acc@1 62.100 Acc@5 91.800
+ *   Acc@1 86.500 Acc@5 96.400
+ *   Acc@1 77.600 Acc@5 93.900
+ *   Acc@1 74.300 Acc@5 92.300
+ *   Acc@1 79.900 Acc@5 95.200
+ *   Acc@1 78.900 Acc@5 93.400
+ *   Acc@1 77.200 Acc@5 92.100
+ *   Acc@1 86.700 Acc@5 97.200
+
+Selection :  [148688, 150936, 124256, 151752, 124744, 144472, 129312, 150832, 0, 8]
+Training for task 9 : [14, 55, 0, 64, 77, 39, 25, 92, 49, 28]
+Epoch: [1][157/157]	Time  0.191 ( 0.512)	Data  0.011 ( 0.044)	Loss -1.3468e-01 (2.6164e-01)	Acc@1 100.00 ( 84.96)	Acc@5 100.00 ( 95.58)
+
+Epoch: [2][157/157]	Time  0.190 ( 0.515)	Data  0.005 ( 0.044)	Loss -1.1118e+00 (-6.5120e-01)	Acc@1 100.00 ( 95.90)	Acc@5 100.00 ( 99.70)
+
+Epoch: [3][157/157]	Time  0.188 ( 0.518)	Data  0.007 ( 0.048)	Loss -9.0783e-01 (-9.4014e-01)	Acc@1 100.00 ( 96.54)	Acc@5 100.00 ( 99.80)
+
+Epoch: [4][157/157]	Time  0.186 ( 0.515)	Data  0.004 ( 0.045)	Loss -1.1984e+00 (-1.0640e+00)	Acc@1 100.00 ( 97.08)	Acc@5 100.00 ( 99.84)
+
+Epoch: [5][157/157]	Time  0.183 ( 0.519)	Data  0.005 ( 0.045)	Loss -1.2017e+00 (-1.1353e+00)	Acc@1 100.00 ( 97.38)	Acc@5 100.00 ( 99.94)
+
+ *   Acc@1 67.300 Acc@5 93.800
+ *   Acc@1 59.700 Acc@5 90.900
+ *   Acc@1 85.700 Acc@5 96.100
+ *   Acc@1 77.200 Acc@5 93.500
+ *   Acc@1 74.400 Acc@5 91.800
+ *   Acc@1 79.700 Acc@5 94.500
+ *   Acc@1 78.900 Acc@5 93.100
+ *   Acc@1 78.200 Acc@5 91.600
+ *   Acc@1 85.800 Acc@5 96.900
+ *   Acc@1 78.200 Acc@5 94.100
+
+Selection :  [173688.0, 150936.0, 149256.0, 151752.0, 149744.0, 169472.0, 154312.0, 150832.0, 0.0, 8.0]
+Done
