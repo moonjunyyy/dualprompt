@@ -137,7 +137,7 @@ parser.add_argument('--local-rank',   default=0, type=int, help='local rank for 
 ############################################################################  
 
 # DualPrompt Parser
-dualprompt = argparse.ArgumentParser(description = 'Dualprompt Options')
+dualprompt = argparse.ArgumentParser(add_help=False)
 dualprompt.add_argument("--backbone-name", type=str)
 dualprompt.add_argument("--pos-g-prompt" , type=int, default = [1], nargs='+')
 dualprompt.add_argument("--len-g-prompt" , type=int)
@@ -147,7 +147,7 @@ dualprompt.add_argument("--lambda"       , type=float, default=1.0)
 dualprompt.add_argument("--prompt-func"  , type=str)
 
 # L2P Parser
-l2p = argparse.ArgumentParser(description = 'L2P Options')
+l2p = argparse.ArgumentParser(add_help=False)
 l2p.add_argument("--backbone-name",        type=str)
 l2p.add_argument("--pool-size",            type=int, default=10)
 l2p.add_argument("--selection-size",       type=int, default=5)
@@ -160,22 +160,22 @@ l2p.add_argument("--_mixed-prompt-token",  default=False, action= argparse.Boole
 l2p.add_argument("--_learnable-pos-emb",   default=False,  action= argparse.BooleanOptionalAction, help="randomize the order of prompt")
 
 # ScaledL2P Parser
-scaledl2p = argparse.ArgumentParser(parents=l2p, description = 'ScaledL2P Options')
+scaledl2p = argparse.ArgumentParser(parents=(l2p,), add_help=False)
 scaledl2p.add_argument("--tau",                default=1.0, type=float)
 scaledl2p.add_argument("--_scale_simmilarity", default=False, action= argparse.BooleanOptionalAction, help="randomize the order of prompt")
 
 # EL2P Parser
-el2p = argparse.ArgumentParser(parents=l2p, description = 'EL2P Options')
+el2p = argparse.ArgumentParser(parents=(l2p,), add_help=False)
 el2p.add_argument("--selection-layer",      type=int, default = [3,6,9], nargs='+')
 el2p.add_argument("--reserve-rate",         type=float, default = 0.7)
 
 # EL2P Parser
-prel2p = argparse.ArgumentParser(parents=l2p, description = 'PrEL2P Options')
+prel2p = argparse.ArgumentParser(parents=(l2p,), add_help=False)
 prel2p.add_argument("--selection-layer",      type=int, default = [3,6,9], nargs='+')
 prel2p.add_argument("--reserve-rate",         type=float, default = 0.7)
 
 # CertL2P Parser
-certl2p = argparse.ArgumentParser(dparents=l2p, escription = 'CertL2P Options')
+certl2p = argparse.ArgumentParser(parents=(l2p,), add_help=False)
 certl2p.add_argument("--selection-layer",      type=int, default = [3,6,9], nargs='+')
 certl2p.add_argument("--reserve-rate",         type=float, default = 0.7)
 
