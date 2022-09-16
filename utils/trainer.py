@@ -111,6 +111,8 @@ class Imgtrainer():
             if 'MASTER_ADDR' not in os.environ.keys():
                 os.environ['MASTER_ADDR'] = '127.0.0.1'
                 os.environ['MASTER_PORT'] = '12701'
+            torch.cuda.set_device(gpu)
+            time.sleep(self.rank * 0.1) # prevent port collision
             dist.init_process_group(backend=self.dist_backend, init_method=self.dist_url,
                                     world_size=self.world_size, rank=self.rank)
             self.setup_for_distributed(self.is_main_process())
@@ -260,6 +262,7 @@ class Imgtrainer():
                 end = time.time()
         torch.cuda.synchronize()
         if self.distributed:
+            dist.barrier()
             top1.all_reduce()
             top5.all_reduce()
         progress.display_summary()
