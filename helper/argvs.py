@@ -182,7 +182,7 @@ certl2p.add_argument("--reserve-rate",         type=float, default = 0.7)
 ############################################################################
 #  Optimizer Parser for Each                                               #
 ############################################################################ 
- 
+
 # Adam Parser
 adam = argparse.ArgumentParser()
 adam.add_argument("--lr"           , type=float, default=0.001)
