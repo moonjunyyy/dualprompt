@@ -39,24 +39,44 @@ class EViT(nn.Module):
         x = self.backbone.pos_drop(x + self.backbone.pos_embed)
         return x
 
-    def feature_forward(self, x : torch.Tensor, reserved_prompts = 0, **kwargs) -> torch.Tensor:
+    def feature_forward(self, x : torch.Tensor, keep_prompts = 0, **kwargs) -> torch.Tensor:
         B, L, D = x.size()
         for n, block in enumerate(self.backbone.blocks):
-            x = x + block.drop_path(block.attn(block.norm1(x)))
+            B, N, C = x.size()
+            K = N
+            r = x
+            x = block.norm1(x)
+          
+            msa   = block.attn
+            qkv = msa.qkv(x).reshape(B, N, 3, msa.num_heads, C // msa.num_heads).permute(2, 0, 3, 1, 4)
+            q, k, v = qkv[0], qkv[1], qkv[2]   # make torchscript happy (cannot use tensor as tuple)
+            attn = (q @ k.transpose(-2, -1)) * msa.scale
+            attn = attn.softmax(dim=-1)
+
+            layer = ((self.selection_layer == n).nonzero()).squeeze()
+            if layer.numel() != 0:
+                importance = attn.mean(dim = 1)[:,0,:]
+
+            attn = msa.attn_drop(attn)
+            x = (attn @ v).transpose(1, 2).reshape(B, -1, C)
+            x = msa.proj(x)
+            x = msa.proj_drop(x)
+            x = r + block.drop_path(x)
+
             layer = ((self.selection_layer == n).nonzero()).squeeze()
             if layer.numel() != 0:
                 cls_tkn = x[:, 0].unsqueeze(1)
-                pmt_tkn = x[:, 1:reserved_prompts] if reserved_prompts != 0 else None
-                img_tkn = x[:, 1+reserved_prompts:]
-                K   = int((L - reserved_prompts) * self.reserve_rate)
-                sim = F.cosine_similarity(img_tkn, cls_tkn, dim = -1)
-                sim, idx = sim.topk(K, dim = -1, sorted=False)
+                pmt_tkn = x[:, 1:keep_prompts] if keep_prompts != 0 else None
+                img_tkn = x[:, 1+keep_prompts:]
+                K   = int((L - keep_prompts) * self.reserve_rate)
+                i, idx = importance.topk(K, dim = -1, sorted=False)
                 img_tkn  = img_tkn.gather(1, idx.unsqueeze(-1).expand(-1, -1, D))
                 rst_tkn  = (x[:,1:].sum(dim = -2, keepdim = True) - img_tkn.sum(dim = -2, keepdim = True))
                 if pmt_tkn is None:
                     x    = torch.cat([cls_tkn, img_tkn, rst_tkn], dim = 1)
                 else:
                     x    = torch.cat([cls_tkn, pmt_tkn, img_tkn, rst_tkn], dim = 1)
+
             x = x + block.drop_path(block.mlp(block.norm2(x)))
         x = self.backbone.norm(x)
         return x

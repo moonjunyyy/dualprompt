@@ -28,8 +28,17 @@ default_cfgs['vit_base_patch16_224_l2p'] = _cfg(
         url='https://storage.googleapis.com/vit_models/imagenet21k/ViT-B_16.npz',
         num_classes=21843)
 
+def dict_print(d : dict, indent = 0) -> None:
+    for k, v in d.items():
+        print('\t' * indent + str(k), end = ' : ')
+        if v is not None and isinstance(v, dict):
+            print('')
+            dict_print(v, indent + 1)
+        else:
+            print(v)
+
 def main(kwargs):
-    print(kwargs)
+    dict_print(kwargs)
     mp.set_start_method('spawn')
     trainer = Imgtrainer(**kwargs)
     trainer.run()
