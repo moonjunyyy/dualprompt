@@ -4,65 +4,100 @@ import timm
 import torch
 import torch.nn as nn
 import torch.nn.functional as F
+from layers.prompt import Prompt
 T = TypeVar('T', bound = 'nn.Module')
 
 class PrEL2P(nn.Module):
     def __init__(self,
-                 vit_name        : str   = None,
+                 backbone_name   : str   = None,
                  class_num       : int   = 100,
+                 pool_size       : int   = 10,
                  reserve_rate    : float = 0.7,
                  selection_layer : tuple = (3,),
+                 lambd           : float = 0.1,
                  _learnable_pos_emb : bool = False,
                  **kwargs):
 
         super().__init__()
         
-        if vit_name is None:
+        if backbone_name is None:
             raise ValueError('vit_name must be specified')
+        
         self.reserve_rate = reserve_rate
-        self.register_buffer('selection_layer', torch.tensor(selection_layer))
+        self.register_buffer('selection_layer', torch.tensor(selection_layer))\
+        
+        self.add_module('backbone', timm.create_model(backbone_name, pretrained=True, num_classes=class_num))
+        num_patches = self.backbone.patch_embed.num_patches
+        self.num_reserve = int(num_patches * self.reserve_rate)
+        self.num_stale   = num_patches - self.num_reserve
+        self.lambd = lambd
 
-        self.add_module('backbone', timm.create_model(vit_name, pretrained=True, num_classes=class_num))
+        self.prompts = Prompt(pool_size, 1, len(self.selection_layer) * self.num_stale, self.backbone.num_features)
         for param in self.backbone.parameters():
             param.requires_grad = False
-
         self.backbone.head.weight.requires_grad = True
         self.backbone.head.bias.requires_grad = True
-        
+
+        self.register_buffer('simmilarity', torch.zeros(1))
+        self.register_buffer('mask', torch.zeros(class_num))
         self.pos_embed = nn.Parameter(self.backbone.pos_embed.clone().detach(), requires_grad=_learnable_pos_emb)
     
-    def cls_append(self, x : torch.Tensor, **kwargs) -> torch.Tensor:
+    def feature_forward(self, x : torch.Tensor, prompts : torch.Tensor, **kwargs) -> torch.Tensor:
         B, N, C = x.size()
-        cls_token = self.backbone.cls_token.expand(B, -1, -1)
-        x = torch.cat((cls_token, x), dim=1)
-        x = self.backbone.pos_drop(x + self.backbone.pos_embed)
-        return x
-
-    def feature_forward(self, x : torch.Tensor, reserved_prompts = 0, **kwargs) -> torch.Tensor:
-        B, L, D = x.size()
+        prompts = prompts.reshape(B, len(self.selection_layer), -1, C).permute(1,0,2,3)
         for n, block in enumerate(self.backbone.blocks):
-            x = x + block.drop_path(block.attn(block.norm1(x)))
+            r = x
+            x = block.norm1(x)
+
+            msa   = block.attn
+            qkv = msa.qkv(x).reshape(B, N, 3, msa.num_heads, C // msa.num_heads).permute(2, 0, 3, 1, 4)
+            q, k, v = qkv[0], qkv[1], qkv[2]   # make torchscript happy (cannot use tensor as tuple)
+
+            attn = (q @ k.transpose(-2, -1)) * msa.scale
+            attn = attn.softmax(dim=-1)
+            attn = msa.attn_drop(attn)
+
             layer = ((self.selection_layer == n).nonzero()).squeeze()
             if layer.numel() != 0:
-                cls_tkn = x[:, 0].unsqueeze(1)
-                pmt_tkn = x[:, 1:reserved_prompts] if reserved_prompts != 0 else None
-                img_tkn = x[:, 1+reserved_prompts:]
-                K   = int((L - reserved_prompts) * self.reserve_rate)
-                sim = F.cosine_similarity(img_tkn, cls_tkn, dim = -1)
-                sim, idx = sim.topk(K, dim = -1, sorted=False)
-                img_tkn  = img_tkn.gather(1, idx.unsqueeze(-1).expand(-1, -1, D))
-                rst_tkn  = (x[:,1:].sum(dim = -2, keepdim = True) - img_tkn.sum(dim = -2, keepdim = True))
-                if pmt_tkn is None:
-                    x    = torch.cat([cls_tkn, img_tkn, rst_tkn], dim = 1)
-                else:
-                    x    = torch.cat([cls_tkn, pmt_tkn, img_tkn, rst_tkn], dim = 1)
+                importance = attn[:, :, 0, :].mean(dim = 1).clone()
+
+            x = (attn @ v).transpose(1, 2).reshape(B, -1, C)
+            x = msa.proj(x)
+            x = msa.proj_drop(x)
+            x = r + block.drop_path(x)
+
+            layer = ((self.selection_layer == n).nonzero()).squeeze()
+            if layer.numel() != 0:
+                i, idx = importance[:,1:].clone().topk(self.num_stale, dim = -1, sorted=False, largest=False)
+                x[:,idx + 1] = prompts[layer].squeeze() + self.pos_embed.expand(B,-1,-1)[:,idx + 1]
             x = x + block.drop_path(block.mlp(block.norm2(x)))
         x = self.backbone.norm(x)
         return x
 
     def forward(self, inputs : torch.Tensor, **kwargs) -> torch.Tensor:
+        self.simmilarity = torch.zeros(1, device=self.simmilarity.device)
         x = self.backbone.patch_embed(inputs)
-        x = self.cls_append(x)
-        x = self.feature_forward(x)
-        x = self.backbond.head(x)
+        B, N, D = x.size()
+        cls_token = self.backbone.cls_token.expand(B, -1, -1)
+        t = torch.cat((cls_token, x), dim=1)
+        x = self.backbone.pos_drop(t + self.backbone.pos_embed)
+
+        q = self.backbone.blocks(x)
+        q = self.backbone.norm(q)[:, 0].clone()
+        s, p = self.prompts(q)
+        self.simmilarity = s.sum()
+        x = self.feature_forward(x, p)
+        x = self.backbone.head(x[:,0].clone())
+
+        if self.training:
+            x = x + self.mask
         return x
+
+    def loss_fn(self, output, target):
+        return F.cross_entropy(output, target) - self.lambd * self.simmilarity
+
+    def _convert_train_task(self, task : torch.Tensor, **kwargs):
+        self.mask += -torch.inf
+        self.mask[task.to(self.mask.device)] = 0
+        updates = self.prompts.update()
+        return torch.tensor(updates)

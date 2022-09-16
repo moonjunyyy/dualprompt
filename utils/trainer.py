@@ -204,19 +204,21 @@ class Imgtrainer():
             # measure data loading time
             data_time.update(time.time() - end)
             images, target = images.to(self.device), target.to(self.device)
-            # compute output
-            output = model(images)
-            loss = criterion(output, target)
-            torch.cuda.synchronize()
-            # measure accuracy and record loss
-            acc1, acc5 = accuracy(output, target, topk=(1, 5))
-            losses.update(loss.item(), images.size(0))
-            top1.update(acc1[0], images.size(0))
-            top5.update(acc5[0], images.size(0))
+            
+            with torch.autograd.set_detect_anomaly(True):
+                # compute output
+                output = model(images)
+                loss = criterion(output, target)
+                torch.cuda.synchronize()
+                # measure accuracy and record loss
+                acc1, acc5 = accuracy(output, target, topk=(1, 5))
+                losses.update(loss.item(), images.size(0))
+                top1.update(acc1[0], images.size(0))
+                top5.update(acc5[0], images.size(0))
 
-            torch.cuda.synchronize()
-            # compute gradient and do SGD step
-            loss.backward()
+                torch.cuda.synchronize()
+                # compute gradient and do SGD step
+                loss.backward()
 
             # measure elapsed time
             batch_time.update(time.time() - end)

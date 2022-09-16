@@ -69,7 +69,7 @@ class EViT(nn.Module):
                 pmt_tkn = x[:, 1:keep_prompts] if keep_prompts != 0 else None
                 img_tkn = x[:, 1+keep_prompts:]
                 K   = int((L - keep_prompts) * self.reserve_rate)
-                i, idx = importance.topk(K, dim = -1, sorted=False)
+                i, idx = importance[:,1:].topk(K, dim = -1, sorted=False)
                 img_tkn  = img_tkn.gather(1, idx.unsqueeze(-1).expand(-1, -1, D))
                 rst_tkn  = (x[:,1:].sum(dim = -2, keepdim = True) - img_tkn.sum(dim = -2, keepdim = True))
                 if pmt_tkn is None:
