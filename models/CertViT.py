@@ -45,7 +45,6 @@ class CertViT(nn.Module):
 
     def feature_forward(self, x : torch.Tensor, keep_prompts = 0, **kwargs) -> torch.Tensor:
         for n, block in enumerate(self.backbone.blocks):
-
             B, N, C = x.size()
             K = N
             r = x

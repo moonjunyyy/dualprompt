@@ -9,7 +9,7 @@ T = TypeVar('T', bound = 'nn.Module')
 
 class EViT(nn.Module):
     def __init__(self,
-                 vit_name        : str   = None,
+                 backbone_name        : str   = None,
                  class_num       : int   = 100,
                  reserve_rate    : float = 0.7,
                  selection_layer : tuple = (3,),
@@ -18,12 +18,12 @@ class EViT(nn.Module):
 
         super().__init__()
         
-        if vit_name is None:
-            raise ValueError('vit_name must be specified')
+        if backbone_name is None:
+            raise ValueError('backbone_name must be specified')
         self.reserve_rate = reserve_rate
         self.register_buffer('selection_layer', torch.tensor(selection_layer))
 
-        self.add_module('backbone', timm.create_model(vit_name, pretrained=True, num_classes=class_num))
+        self.add_module('backbone', timm.create_model(backbone_name, pretrained=True, num_classes=class_num))
         for param in self.backbone.parameters():
             param.requires_grad = False
 
@@ -55,7 +55,7 @@ class EViT(nn.Module):
 
             layer = ((self.selection_layer == n).nonzero()).squeeze()
             if layer.numel() != 0:
-                importance = attn.mean(dim = 1)[:,0,:]
+                importance = attn.mean(dim = 1)[:,0,:].clone()
 
             attn = msa.attn_drop(attn)
             x = (attn @ v).transpose(1, 2).reshape(B, -1, C)

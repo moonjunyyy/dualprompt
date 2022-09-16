@@ -27,6 +27,10 @@ def model_parser(model_name : str, args : list):
         return ScaledL2P, vars(scaledl2p.parse_known_args(args)[0])
     elif model_name == "prel2p":
         return PrEL2P, vars(prel2p.parse_known_args(args)[0])
+    elif model_name == "evit":
+        return L2P, vars(certvit.parse_known_args(args)[0])
+    elif model_name == "certvit":
+        return L2P, vars(certvit.parse_known_args(args)[0])
     else:
         raise ValueError("unknown model name {}".format(model_name)[0])
 
@@ -178,6 +182,18 @@ prel2p.add_argument("--reserve-rate",         type=float, default = 0.7)
 certl2p = argparse.ArgumentParser(parents=(l2p,), add_help=False)
 certl2p.add_argument("--selection-layer",      type=int, default = [3,6,9], nargs='+')
 certl2p.add_argument("--reserve-rate",         type=float, default = 0.7)
+
+# CertL2P Parser
+evit = argparse.ArgumentParser()
+evit.add_argument("--backbone-name",   type=str)
+evit.add_argument("--selection-layer", type=int, default = [3,6,9], nargs='+')
+evit.add_argument("--reserve-rate",    type=float, default = 0.7)
+
+# CertL2P Parser
+certvit = argparse.ArgumentParser()
+certvit.add_argument("--backbone-name",   type=str)
+certvit.add_argument("--selection-layer", type=int, default = [3,6,9], nargs='+')
+certvit.add_argument("--reserve-rate",    type=float, default = 0.7)
 
 ############################################################################
 #  Optimizer Parser for Each                                               #
