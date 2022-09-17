@@ -46,7 +46,7 @@ class CertViT(nn.Module):
             if layer.numel() != 0:
                 evidence = F.relu(attn)
                 strength = (evidence + 1).sum(-1)
-                uncertainty = (N / strength).mean(1)
+                uncertainty = (N / strength).mean(1)[:,1:]
                 pass
 
             norm = (attn @ v).transpose(1, 2).reshape(B, N, C)

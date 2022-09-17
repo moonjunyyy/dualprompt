@@ -19,7 +19,6 @@ class PrEL2P(nn.Module):
                  **kwargs):
 
         super().__init__()
-        
         if backbone_name is None:
             raise ValueError('vit_name must be specified')
         

@@ -8,6 +8,8 @@
 # Ignore Output And Test Files
 saved/
 run/
+out/
+execute/
 test.py
 *.out
 *.err

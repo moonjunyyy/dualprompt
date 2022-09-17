@@ -252,15 +252,10 @@ exp.add_argument("--last-epoch"   , type=int, default=0)
 
 # CosineAnnealingLR Parser
 cos = argparse.ArgumentParser()
-cos.add_argument("--lr"           , type=float, default=0.001)
-cos.add_argument("--step-size"    , type=int, default=1)
-cos.add_argument("--gamma"        , type=float, default=0.1)
-cos.add_argument("--warmup-steps" , type=int, default=0)
-cos.add_argument("--warmup-init-lr", type=float, default=0.001)
-cos.add_argument("--warmup-gamma" , type=float, default=0.1)
-cos.add_argument("--target-lr"    , type=float, default=0.001)
-cos.add_argument("--last-epoch"   , type=int, default=0)
-
+cos.add_argument("--T-max"        , type=int,   default=15)
+cos.add_argument("--eta-min"      , type=float, default=1e-6)
+cos.add_argument("--last-epoch"  , type=int,   default=-1)
+cos.add_argument("--verbose"      , default=False,  action= argparse.BooleanOptionalAction)
 # StepLR Parser
 step = argparse.ArgumentParser()
 step.add_argument("--lr"             , type=float, default=0.001)
