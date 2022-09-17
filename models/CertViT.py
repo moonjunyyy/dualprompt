@@ -59,8 +59,8 @@ class CertViT(nn.Module):
                 img_tkn = x[:, 1:]
                 _, idx = uncertainty.topk(K, largest = True, sorted = True)
                 _, stl = uncertainty.topk(N - K, largest = True, sorted = True)
-                stl_tkn = img_tkn[:,stl].sum(1).unsqueeze(1)
-                img_tkn = img_tkn[:,idx]
+                stl_tkn = img_tkn.gather(1, stl.unsqueeze(-1).expand(-1, -1, C)).sum(1).unsqueeze(1)
+                img_tkn = img_tkn.gather(1, idx.unsqueeze(-1).expand(-1, -1, C))
                 x = torch.concat((cls_tkn, img_tkn, stl_tkn), dim = 1)
             x = x + block.drop_path(block.mlp(block.norm2(x)))
         return x
