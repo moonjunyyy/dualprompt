@@ -130,52 +130,10 @@ class Imgtrainer():
                 'from checkpoints.')
         cudnn.benchmark = True
 
-        _r = dist.get_rank() if self.distributed else None # means that it is not distributed
-        _w = dist.get_world_size() if self.distributed else None # means that it is not distributed
-        sampler_train = CILSampler(self.dataset_train, self.num_tasks, _w, _r, shuffle=True, seed=self.seed)
-        sampler_val   = CILSampler(self.dataset_val  , self.num_tasks, _w, _r, shuffle=False, seed=self.seed)
-        self.batch_size = int(self.batch_size // self.world_size)
-        
-        print("Building model...")
-        model = self.model(**self.model_args)
-        model.to(self.device)
-        model_without_ddp = model
-        if self.distributed:
-            model = torch.nn.parallel.DistributedDataParallel(model)
-            model._set_static_graph()
-            model_without_ddp = model.module
-        criterion = model_without_ddp.loss_fn if self.criterion == 'custom' else self.criterion()
-        optimizer = self.optimizer(model.parameters(), **self.optimizer_args)
-        scheduler = self.scheduler(optimizer, **self.scheduler_args)
-
-        n_params = sum(p.numel() for p in model_without_ddp.parameters())
-        print(f"Total Parameters :\t{n_params}")
-        n_params = sum(p.numel() for p in model_without_ddp.parameters() if p.requires_grad)
-        print(f"Learnable Parameters :\t{n_params}")
-        print("")
-
-        if not self.training:
-                self.validate(loader_val, model, criterion)
-                return
-        for self.task in range(self.num_tasks):
-            loader_train = self.set_task(self.dataset_train, sampler_train, self.task)
-            print("Selection : ",(model_without_ddp._convert_train_task(sampler_train.get_task()).to(torch.int) - 1).tolist())
-            print(f"Training for task {self.task} : {sampler_train.get_task().tolist()}")
-
-            for self.epoch in range(self.epochs):
-                sampler_train.set_epoch(self.epoch)
-                self.train(loader_train, model, criterion, optimizer)
-                print('')
-                scheduler.step()
-
-            for self.test in range(self.task + 1):
-                loader_val = self.set_task(self.dataset_val, sampler_val, self.test) 
-                self.validate(loader_val, model, criterion)
-
-            self.epoch = 0
-            optimizer = self.optimizer(model.parameters(), **self.optimizer_args)
-            print('')
-        print("Selection : ",(model_without_ddp._convert_train_task(sampler_train.get_task())-1).tolist())
+        if self.task_governor == "CIL":
+            self.CILTrain()
+        else:
+            self.SingleTaskTrain()
     
     def set_task(self, dataset, sampler, task):
         sampler.set_task(task)
@@ -339,4 +297,94 @@ class Imgtrainer():
             print("Load failed. Start from Scratch.")
             return
         print("Loaded model from epoch {}".format(self.epoch))
+        return
+
+    def CILTrain(self):
+        _r = dist.get_rank() if self.distributed else None # means that it is not distributed
+        _w = dist.get_world_size() if self.distributed else None # means that it is not distributed
+        sampler_train = CILSampler(self.dataset_train, self.num_tasks, _w, _r, shuffle=True, seed=self.seed)
+        sampler_val   = CILSampler(self.dataset_val  , self.num_tasks, _w, _r, shuffle=False, seed=self.seed)
+        self.batch_size = int(self.batch_size // self.world_size)
+        
+        print("Building model...")
+        model = self.model(**self.model_args)
+        model.to(self.device)
+        model_without_ddp = model
+        if self.distributed:
+            model = torch.nn.parallel.DistributedDataParallel(model)
+            model._set_static_graph()
+            model_without_ddp = model.module
+        criterion = model_without_ddp.loss_fn if self.criterion == 'custom' else self.criterion()
+        optimizer = self.optimizer(model.parameters(), **self.optimizer_args)
+        scheduler = self.scheduler(optimizer, **self.scheduler_args)
+
+        n_params = sum(p.numel() for p in model_without_ddp.parameters())
+        print(f"Total Parameters :\t{n_params}")
+        n_params = sum(p.numel() for p in model_without_ddp.parameters() if p.requires_grad)
+        print(f"Learnable Parameters :\t{n_params}")
+        print("")
+
+        for self.task in range(self.num_tasks):
+            loader_train = self.set_task(self.dataset_train, sampler_train, self.task)
+            print("Selection : ",(model_without_ddp._convert_train_task(sampler_train.get_task()).to(torch.int) - 1).tolist())
+            print(f"Training for task {self.task} : {sampler_train.get_task().tolist()}")
+
+            for self.epoch in range(self.epochs):
+                sampler_train.set_epoch(self.epoch)
+                self.train(loader_train, model, criterion, optimizer)
+                print('')
+                scheduler.step()
+
+            for self.test in range(self.task + 1):
+                loader_val = self.set_task(self.dataset_val, sampler_val, self.test) 
+                self.validate(loader_val, model, criterion)
+
+            self.epoch = 0
+            optimizer = self.optimizer(model.parameters(), **self.optimizer_args)
+            print('')
+        print("Selection : ",(model_without_ddp._convert_train_task(sampler_train.get_task())-1).tolist())
+        return
+
+    
+    def SingleTaskTrain(self):
+        _r = dist.get_rank() if self.distributed else None # means that it is not distributed
+        _w = dist.get_world_size() if self.distributed else None # means that it is not distributed
+        sampler_train = CILSampler(self.dataset_train, 1, _w, _r, shuffle=True, seed=self.seed)
+        sampler_val   = CILSampler(self.dataset_val  , 1, _w, _r, shuffle=False, seed=self.seed)
+        self.batch_size = int(self.batch_size // self.world_size)
+        
+        print("Building model...")
+        model = self.model(**self.model_args)
+        model.to(self.device)
+        model_without_ddp = model
+        if self.distributed:
+            model = torch.nn.parallel.DistributedDataParallel(model)
+            model._set_static_graph()
+            model_without_ddp = model.module
+        criterion = model_without_ddp.loss_fn if self.criterion == 'custom' else self.criterion()
+        optimizer = self.optimizer(model.parameters(), **self.optimizer_args)
+        scheduler = self.scheduler(optimizer, **self.scheduler_args)
+
+        n_params = sum(p.numel() for p in model_without_ddp.parameters())
+        print(f"Total Parameters :\t{n_params}")
+        n_params = sum(p.numel() for p in model_without_ddp.parameters() if p.requires_grad)
+        print(f"Learnable Parameters :\t{n_params}")
+        print("")
+
+        loader_train = self.set_task(self.dataset_train, sampler_train, 0)
+        loader_val = self.set_task(self.dataset_val, sampler_val, 0) 
+        self.task = 0
+        self.test = 0
+        if not self.training:
+            self.validate(loader_val, model, criterion)
+            return
+
+        for self.epoch in range(self.epochs):
+            sampler_train.set_epoch(self.epoch)
+            self.train(loader_train, model, criterion, optimizer)
+            print('')
+            scheduler.step()
+            self.validate(loader_val, model, criterion)
+
+        print('')
         return

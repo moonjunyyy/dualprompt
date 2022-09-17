@@ -45,6 +45,12 @@ class EL2P(EViT):
             _mixed_prompt_order = _mixed_prompt_order,
             _mixed_prompt_token = _mixed_prompt_token)
 
+        
+        for param in self.backbone.parameters():
+            param.requires_grad = False
+        self.pos_embed = nn.Parameter(self.backbone.pos_embed.clone().detach(), requires_grad=_learnable_pos_emb)
+        self.backbone.head.weight.requires_grad = True
+        self.backbone.head.bias.requires_grad = True
         self.register_buffer('simmilarity', torch.zeros(1))
         self.register_buffer('mask', torch.zeros(class_num))
         

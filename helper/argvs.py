@@ -11,6 +11,8 @@ from models.EL2P import EL2P
 from models.ScaledL2P import ScaledL2P
 from models.PrEL2P import PrEL2P
 from models.CertL2P import CertL2P
+from models.EViT import EViT
+from models.CertViT import CertViT
 
 #Functions to parse arguments
 
@@ -28,9 +30,9 @@ def model_parser(model_name : str, args : list):
     elif model_name == "prel2p":
         return PrEL2P, vars(prel2p.parse_known_args(args)[0])
     elif model_name == "evit":
-        return L2P, vars(certvit.parse_known_args(args)[0])
+        return EViT, vars(evit.parse_known_args(args)[0])
     elif model_name == "certvit":
-        return L2P, vars(certvit.parse_known_args(args)[0])
+        return CertViT, vars(certvit.parse_known_args(args)[0])
     else:
         raise ValueError("unknown model name {}".format(model_name)[0])
 
