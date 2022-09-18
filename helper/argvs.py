@@ -33,7 +33,7 @@ def model_parser(model_name : str, args : list):
         return ScaledL2P, vars(scaledl2p.parse_known_args(args)[0])
     elif model_name == "prel2p":
         return PrEL2P, vars(prel2p.parse_known_args(args)[0])
-    elif model_name == "prel2p":
+    elif model_name == "gradmodl2p":
         return GradModL2P, vars(gradmodl2p.parse_known_args(args)[0])
     elif model_name == "evit":
         return EViT, vars(evit.parse_known_args(args)[0])
