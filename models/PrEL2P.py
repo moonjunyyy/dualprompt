@@ -12,6 +12,7 @@ class PrEL2P(nn.Module):
                  backbone_name   : str   = None,
                  class_num       : int   = 100,
                  pool_size       : int   = 10,
+                 selection_size  : int   = 4,
                  reserve_rate    : float = 0.7,
                  selection_layer : tuple = (3,),
                  lambd           : float = 0.1,
@@ -23,15 +24,16 @@ class PrEL2P(nn.Module):
             raise ValueError('vit_name must be specified')
         
         self.reserve_rate = reserve_rate
-        self.register_buffer('selection_layer', torch.tensor(selection_layer))\
+        self.selection_size = selection_size
+        self.register_buffer('selection_layer', torch.tensor(selection_layer))
         
         self.add_module('backbone', timm.create_model(backbone_name, pretrained=True, num_classes=class_num))
         num_patches = self.backbone.patch_embed.num_patches
-        self.num_reserve = int(num_patches * self.reserve_rate)
-        self.num_stale   = num_patches - self.num_reserve
+        self.num_stale   = ((num_patches - int(num_patches * self.reserve_rate)) // selection_size) * selection_size
+        self.num_reserve = num_patches - self.num_stale
         self.lambd = lambd
 
-        self.prompts = Prompt(pool_size, 1, len(self.selection_layer) * self.num_stale, self.backbone.num_features)
+        self.prompts = Prompt(pool_size, selection_size, len(self.selection_layer) * self.num_stale // selection_size, self.backbone.num_features)
         for param in self.backbone.parameters():
             param.requires_grad = False
         self.backbone.head.weight.requires_grad = True
@@ -43,7 +45,8 @@ class PrEL2P(nn.Module):
     
     def feature_forward(self, x : torch.Tensor, prompts : torch.Tensor, **kwargs) -> torch.Tensor:
         B, N, C = x.size()
-        prompts = prompts.reshape(B, len(self.selection_layer), -1, C).permute(1,0,2,3)
+        prompts = prompts.reshape(B, self.selection_size, len(self.selection_layer), -1, C)
+        prompts = prompts.permute(2,0,1,3,4).reshape(len(self.selection_layer), B, -1, C)
         for n, block in enumerate(self.backbone.blocks):
             r = x
             x = block.norm1(x)
