@@ -22,7 +22,6 @@ from utils.sampler import CILSampler
 ########################################################################################################################
 
 # TODO : Other Task Settings (TIL, Task Agnostic)
-# TODO : Multi Node Distribution Code
 
 class Imgtrainer():
     def __init__(self,
@@ -57,6 +56,7 @@ class Imgtrainer():
         self.save_path    = save_path
         self.pin_mem      = pin_mem
         self.use_amp      = use_amp
+        self.scaler       = torch.cuda.amp.GradScaler(enabled=use_amp)
         self.seed         = seed
         self.device       = device
         self.debug        = debug
@@ -163,28 +163,24 @@ class Imgtrainer():
             data_time.update(time.time() - end)
             images, target = images.to(self.device), target.to(self.device)
             
-            with torch.autograd.set_detect_anomaly(True):
+            with torch.cuda.amp.autocast(enabled=self.use_amp):
                 # compute output
                 output = model(images)
                 loss = criterion(output, target)
-                torch.cuda.synchronize()
                 # measure accuracy and record loss
                 acc1, acc5 = accuracy(output, target, topk=(1, 5))
                 losses.update(loss.item(), images.size(0))
                 top1.update(acc1[0], images.size(0))
                 top5.update(acc5[0], images.size(0))
-
-                torch.cuda.synchronize()
                 # compute gradient and do SGD step
-                loss.backward()
-
+                self.scaler.scale(loss).backward()
             # measure elapsed time
             batch_time.update(time.time() - end)
             end = time.time()
-
             if i % self.step_size == self.step_size - 1 or i == len(loader) - 1:
-                optimizer.step()
+                self.scaler.step(optimizer)
                 optimizer.zero_grad()
+                self.scaler.update()
             if i % log_interval == log_interval - 1 or i == len(loader) - 1:
                 progress.display(i + 1)
         progress.write_summary(epoch = self.epoch, save_path = self.save_path, prefix='Train/')
@@ -206,27 +202,25 @@ class Imgtrainer():
         with torch.no_grad():
             end = time.time()
             for i, (images, target) in enumerate(loader):
-                images, target = images.to(self.device), target.to(self.device)
-                # compute output
-                output = model(images)
-                loss = criterion(output, target)
-
-                # measure accuracy and record loss
-                acc1, acc5 = accuracy(output, target, topk=(1, 5))
-                losses.update(loss.item(), images.size(0))
-                top1.update(acc1[0], images.size(0))
-                top5.update(acc5[0], images.size(0))
-
-                # measure elapsed time
-                batch_time.update(time.time() - end)
-                end = time.time()
-        torch.cuda.synchronize()
+                with torch.cuda.amp.autocast(enabled=self.use_amp):
+                    images, target = images.to(self.device), target.to(self.device)
+                    # compute output
+                    output = model(images)
+                    loss = criterion(output, target)
+                    # measure accuracy and record loss
+                    acc1, acc5 = accuracy(output, target, topk=(1, 5))
+                    losses.update(loss.item(), images.size(0))
+                    top1.update(acc1[0], images.size(0))
+                    top5.update(acc5[0], images.size(0))
+                    # measure elapsed time
+                    batch_time.update(time.time() - end)
+                    end = time.time()
         if self.distributed:
             dist.barrier()
             top1.all_reduce()
             top5.all_reduce()
         progress.display_summary()
-        progress.write_summary(epoch = self.test, save_path = self.save_path, prefix='Test/task{}/'.format(self.task))
+        progress.write_summary(epoch = self.task, save_path = self.save_path, prefix='Test/task{}/'.format(self.test))
 
         return top1.avg
     def save_on_master(self):

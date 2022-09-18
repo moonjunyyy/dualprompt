@@ -13,6 +13,8 @@ from models.PrEL2P import PrEL2P
 from models.CertL2P import CertL2P
 from models.EViT import EViT
 from models.CertViT import CertViT
+from models.meanL2P import meanL2P
+from models.GradModL2P import GradModL2P
 
 #Functions to parse arguments
 
@@ -21,6 +23,8 @@ def model_parser(model_name : str, args : list):
         return DualPrompt, vars(dualprompt.parse_known_args(args)[0])
     elif model_name == "l2p":
         return L2P, vars(l2p.parse_known_args(args)[0])
+    elif model_name == "meanl2p":
+        return meanL2P, vars(l2p.parse_known_args(args)[0])
     elif model_name == "el2p":
         return EL2P, vars(el2p.parse_known_args(args)[0])
     elif model_name == "certl2p":
@@ -29,6 +33,8 @@ def model_parser(model_name : str, args : list):
         return ScaledL2P, vars(scaledl2p.parse_known_args(args)[0])
     elif model_name == "prel2p":
         return PrEL2P, vars(prel2p.parse_known_args(args)[0])
+    elif model_name == "gradmodl2p":
+        return GradModL2P, vars(gradmodl2p.parse_known_args(args)[0])
     elif model_name == "evit":
         return EViT, vars(evit.parse_known_args(args)[0])
     elif model_name == "certvit":
@@ -172,24 +178,28 @@ scaledl2p.add_argument("--_scale_simmilarity", default=False, action= argparse.B
 
 # EL2P Parser
 el2p = argparse.ArgumentParser(parents=(l2p,), add_help=False)
-el2p.add_argument("--selection-layer",      type=int, default = [3,6,9], nargs='+')
-el2p.add_argument("--reserve-rate",         type=float, default = 0.7)
+el2p.add_argument("--selection-layer",    type=int, default = [3,6,9], nargs='+')
+el2p.add_argument("--reserve-rate",       type=float, default = 0.7)
 
 # EL2P Parser
 prel2p = argparse.ArgumentParser(parents=(l2p,), add_help=False)
-prel2p.add_argument("--selection-layer",      type=int, default = [3,6,9], nargs='+')
-prel2p.add_argument("--reserve-rate",         type=float, default = 0.7)
+prel2p.add_argument("--selection-layer",  type=int, default = [3,6,9], nargs='+')
+prel2p.add_argument("--reserve-rate",     type=float, default = 0.7)
 
 # CertL2P Parser
 certl2p = argparse.ArgumentParser(parents=(l2p,), add_help=False)
-certl2p.add_argument("--selection-layer",      type=int, default = [3,6,9], nargs='+')
-certl2p.add_argument("--reserve-rate",         type=float, default = 0.7)
+certl2p.add_argument("--selection-layer", type=int, default = [3,6,9], nargs='+')
+certl2p.add_argument("--reserve-rate",    type=float, default = 0.7)
+
+# GradModL2P Parser
+gradmodl2p = argparse.ArgumentParser(parents=(l2p,), add_help=False)
+gradmodl2p.add_argument("--gamma",        type=float, default = 0.7)
 
 # CertL2P Parser
 evit = argparse.ArgumentParser()
-evit.add_argument("--backbone-name",   type=str)
-evit.add_argument("--selection-layer", type=int, default = [3,6,9], nargs='+')
-evit.add_argument("--reserve-rate",    type=float, default = 0.7)
+evit.add_argument("--backbone-name",      type=str)
+evit.add_argument("--selection-layer",    type=int, default = [3,6,9], nargs='+')
+evit.add_argument("--reserve-rate",       type=float, default = 0.7)
 
 # CertL2P Parser
 certvit = argparse.ArgumentParser()
