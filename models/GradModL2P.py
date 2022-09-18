@@ -103,11 +103,15 @@ class GradModL2P(nn.Module):
         self.mean_prompts = x.clone()
         if self.training:
             x = x + self.mask
+            self.prompts = self.prompts + self.mask
+            self.mean_prompts = self.mean_prompts + self.mask
         return x
     
     def loss_fn(self, output, target):
         B, C = output.size()
-        return self.gamma * F.cross_entropy(self.mean_prompts, target) + (1 - self.gamma) * F.cross_entropy(self.prompts.transpose(-1,-2), target.unsqueeze(1).expand(B, self.selection_size * self.prompt_len)).min() - self.lambd * self.simmilarity
+        L_ce = F.cross_entropy(self.mean_prompts, target)
+        L_dd = F.cross_entropy(self.prompts.transpose(-1,-2), target.unsqueeze(1).expand(B, self.selection_size * self.prompt_len)).min()
+        return self.gamma * L_ce + (1 - self.gamma) * L_dd - self.lambd * self.simmilarity
 
     def _convert_train_task(self, task : torch.Tensor, **kwargs):
         self.mask += -torch.inf
