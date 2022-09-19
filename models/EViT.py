@@ -21,7 +21,6 @@ class EViT(nn.Module):
         self.reserve_rate = reserve_rate
         self.register_buffer('selection_layer', torch.tensor(selection_layer))
         self.add_module('backbone', timm.create_model(backbone_name, pretrained=True, num_classes=class_num))
-
     
     def cls_append(self, x : torch.Tensor, **kwargs) -> torch.Tensor:
         B, N, C = x.shape
