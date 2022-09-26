@@ -45,9 +45,9 @@ class CILSampler(torch.utils.data.Sampler):
     def build(self):
         self.g.manual_seed(self.seed + self.epoch)
         if self.shuffle:
-            idx = torch.randperm(len(self.dataset) * self.num_replicas, generator=self.g) % len(self.dataset)
+            idx = torch.randperm(len(self.dataset) * self.num_repeats, generator=self.g) % len(self.dataset)
         else:
-            idx = torch.arange(len(self.dataset) * self.num_replicas) % len(self.dataset)
+            idx = torch.arange(len(self.dataset) * self.num_repeats) % len(self.dataset)
         sel = (torch.tensor(self.dataset.targets)[idx] == self.taskids[self.task].unsqueeze(-1)).sum(0).nonzero()
         self.indices = idx[sel].squeeze()
         if self.distributed:

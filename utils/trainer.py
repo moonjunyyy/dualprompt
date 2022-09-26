@@ -7,10 +7,14 @@ import torch.backends.cudnn as cudnn
 import torch.distributed as dist
 import torch.multiprocessing as mp
 import torchvision.transforms as transforms
+from torchvision.datasets import ImageFolder
 from helper.metric import AverageMeter, ProgressMeter, Summary, accuracy
 import builtins
-from torch.utils.data import DataLoader, Subset
+from torch.utils.data import DataLoader, Subset, random_split
+from tsne_torch import TorchTSNE as TSNE
+import matplotlib.pyplot as plt
 
+from utils._subset import _Subset
 from utils.sampler import CILSampler
 
 ########################################################################################################################
@@ -49,9 +53,9 @@ class Imgtrainer():
         self.task_governor = task_governor
         
         self.training     = True
-        self.lock         = mp.Lock()
         self.num_tasks    = num_tasks
         self.num_workers  = num_workers
+        self.dataset      = dataset
         self.dataset_path = dataset_path
         self.save_path    = save_path
         self.pin_mem      = pin_mem
@@ -73,15 +77,23 @@ class Imgtrainer():
         else:
             self.world_size  = self.world_size * self.ngpus_per_nodes
         self.distributed     = self.world_size > 1
-
+        
         # Transform needs to be diversed and be selected by user
-        transform = transforms.Compose([transforms.Resize(224),
+        transform = transforms.Compose([transforms.Resize((224, 224)),
                                         transforms.ToTensor ()])
-        self.dataset_train   = dataset(dataset_path, download=True, train=True,  transform=transform)
-        self.dataset_val     = dataset(dataset_path, download=True, train=False, transform=transform)
+        if self.dataset == ImageFolder:
+            self.dataset = ImageFolder(self.dataset_path, transform)
+            idx = torch.randperm(len(self.dataset))
+            self.dataset_train, self.dataset_val = random_split(self.dataset, [int(len(self.dataset) * 0.8), len(self.dataset) - int(len(self.dataset) * 0.8)])
+            self.dataset_train = _Subset(self.dataset_train)
+            self.dataset_val   = _Subset(self.dataset_val)
+            pass
+        else:
+            self.dataset_train   = self.dataset(self.dataset_path, download=True, train=True,  transform=transform)
+            self.dataset_val     = self.dataset(self.dataset_path, download=True, train=False, transform=transform)
 
     def run(self):
-        if self.distributed: 
+        if self.ngpus_per_nodes > 1: 
             processes = []
             for n in range(self.ngpus_per_nodes):
                 print(f"start process {n}...")
@@ -91,7 +103,6 @@ class Imgtrainer():
             for p in processes:
                 p.join()
             return
-    
         else:
             self.main_worker(self.local_rank)
 
@@ -99,7 +110,6 @@ class Imgtrainer():
         self.gpu    = gpu % self.ngpus_per_nodes
         self.device = torch.device(self.gpu)
         if self.distributed:
-            #os.environ['MASTER_PORT'] = str(int(os.environ['MASTER_PORT']) + self.rank * self.ngpus_per_nodes + gpu)
             self.local_rank = gpu
             if 'SLURM_PROCID' in os.environ.keys():
                 self.rank = int(os.environ['SLURM_PROCID']) * self.ngpus_per_nodes + gpu
@@ -118,6 +128,7 @@ class Imgtrainer():
             self.setup_for_distributed(self.is_main_process())
         else:
             pass
+
         if self.seed is not None:
             seed = self.seed + self.rank
             random.seed(seed)
@@ -131,9 +142,11 @@ class Imgtrainer():
         cudnn.benchmark = True
 
         if self.task_governor == "CIL":
-            self.CILTrain()
+            self.CIL_Train()
+        elif self.task_governor == "CIL_tsne":
+            self.CIL_Train_with_TSNE()
         else:
-            self.SingleTaskTrain()
+            self.Single_Task_Train()
     
     def set_task(self, dataset, sampler, task):
         sampler.set_task(task)
@@ -183,10 +196,10 @@ class Imgtrainer():
                 self.scaler.update()
             if i % log_interval == log_interval - 1 or i == len(loader) - 1:
                 progress.display(i + 1)
-        progress.write_summary(epoch = self.epoch, save_path = self.save_path, prefix='Train/')
+        progress.write_summary(epoch = self.task * self. epochs + self.epoch, save_path = self.save_path, prefix='Train/')
                 
     def validate(self, loader, model, criterion):
-
+        
         batch_time = AverageMeter('Time', ':6.3f', Summary.NONE)
         losses = AverageMeter('Loss', ':.4e', Summary.NONE)
         top1 = AverageMeter('Acc@1', ':6.2f', Summary.AVERAGE)
@@ -260,20 +273,20 @@ class Imgtrainer():
                 builtin_print(*args, **kwargs)
         __builtin__.print = print
 
-    def save(self):
+    def save(self, model, optimizer, scheduler, epoch):
             r'''
             Save the model.
             '''
             torch.save({
-                'epoch'                : self.epoch,
-                'model_state_dict'     : self.model.state_dict(),
-                'optimizer_state_dict' : self.optimizer.state_dict(),
-                'scheduler_state_dict' : self.scheduler.state_dict(),
+                'epoch'                : epoch,
+                'model_state_dict'     : model.state_dict(),
+                'optimizer_state_dict' : optimizer.state_dict(),
+                'scheduler_state_dict' : scheduler.state_dict(),
             }, os.path.join(self.save_path, 'checkpoint_{}.pth'.format(self.epoch)))
             print("Saved checkpoint to {}".format(os.path.join(self.save_path, 'checkpoint_{}.pth'.format(self.epoch))))
-            return
+            return True
             
-    def load(self, load_idx = -1):
+    def load(self, model, optimizer, scheduler, epoch, load_idx = -1):
         r'''
         Load the model.
         '''
@@ -283,19 +296,20 @@ class Imgtrainer():
         except:
             pass
         try:
-            self.model.load_state_dict(load_dict['model_state_dict'])
-            self.optimizer.load_state_dict(load_dict['optimizer_state_dict'])
-            self.scheduler.load_state_dict(load_dict['scheduler_state_dict'])
-            self.epoch = load_dict['epoch']
+            model.load_state_dict(load_dict['model_state_dict'])
+            optimizer.load_state_dict(load_dict['optimizer_state_dict'])
+            scheduler.load_state_dict(load_dict['scheduler_state_dict'])
+            epoch = load_dict['epoch']
         except:
             print("Load failed. Start from Scratch.")
-            return
+            return model, optimizer, scheduler, epoch
         print("Loaded model from epoch {}".format(self.epoch))
-        return
+        return model, optimizer, scheduler, epoch
 
-    def CILTrain(self):
+    def CIL_Train(self):
         _r = dist.get_rank() if self.distributed else None # means that it is not distributed
         _w = dist.get_world_size() if self.distributed else None # means that it is not distributed
+        
         sampler_train = CILSampler(self.dataset_train, self.num_tasks, _w, _r, shuffle=True, seed=self.seed)
         sampler_val   = CILSampler(self.dataset_val  , self.num_tasks, _w, _r, shuffle=False, seed=self.seed)
         self.batch_size = int(self.batch_size // self.world_size)
@@ -311,6 +325,8 @@ class Imgtrainer():
         criterion = model_without_ddp.loss_fn if self.criterion == 'custom' else self.criterion()
         optimizer = self.optimizer(model.parameters(), **self.optimizer_args)
         scheduler = self.scheduler(optimizer, **self.scheduler_args)
+
+        self.load(model_without_ddp, optimizer, scheduler, self.epoch)
 
         n_params = sum(p.numel() for p in model_without_ddp.parameters())
         print(f"Total Parameters :\t{n_params}")
@@ -337,12 +353,101 @@ class Imgtrainer():
             optimizer = self.optimizer(model.parameters(), **self.optimizer_args)
             print('')
         print("Selection : ",(model_without_ddp._convert_train_task(sampler_train.get_task())-1).tolist())
+        self.save(model_without_ddp, optimizer, scheduler, self.epoch)
         return
 
-    
-    def SingleTaskTrain(self):
+    def CIL_Train_with_TSNE(self):
         _r = dist.get_rank() if self.distributed else None # means that it is not distributed
         _w = dist.get_world_size() if self.distributed else None # means that it is not distributed
+        
+        sampler_train = CILSampler(self.dataset_train, self.num_tasks, _w, _r, shuffle=True, seed=self.seed)
+        sampler_val   = CILSampler(self.dataset_val  , self.num_tasks, _w, _r, shuffle=False, seed=self.seed)
+        self.batch_size = int(self.batch_size // self.world_size)
+        
+        print("Building model...")
+        model = self.model(**self.model_args)
+        model.to(self.device)
+        model_without_ddp = model
+        if self.distributed:
+            model = torch.nn.parallel.DistributedDataParallel(model)
+            model._set_static_graph()
+            model_without_ddp = model.module
+        criterion = model_without_ddp.loss_fn if self.criterion == 'custom' else self.criterion()
+        optimizer = self.optimizer(model.parameters(), **self.optimizer_args)
+        scheduler = self.scheduler(optimizer, **self.scheduler_args)
+
+        self.load(model_without_ddp, optimizer, scheduler, self.epoch)
+
+        n_params = sum(p.numel() for p in model_without_ddp.parameters())
+        print(f"Total Parameters :\t{n_params}")
+        n_params = sum(p.numel() for p in model_without_ddp.parameters() if p.requires_grad)
+        print(f"Learnable Parameters :\t{n_params}")
+        print("")
+
+        ViT_Features = [torch.empty((0, model_without_ddp.backbone.num_features), device=self.device) for i in range(self.num_tasks)]
+
+        for self.task in range(self.num_tasks):
+            loader_train = self.set_task(self.dataset_train, sampler_train, self.task)
+            print("Selection : ",(model_without_ddp._convert_train_task(sampler_train.get_task()).to(torch.int) - 1).tolist())
+            print(f"Training for task {self.task} : {sampler_train.get_task().tolist()}")
+
+            for i, (data, target) in enumerate(loader_train):
+                data = data.to(self.device)
+                x = model_without_ddp.backbone.patch_embed(data)
+
+                B, N, D = x.size()
+                cls_token = model_without_ddp.backbone.cls_token.expand(B, -1, -1)
+                t = torch.cat((cls_token, x), dim=1)
+                x = model_without_ddp.backbone.pos_drop(t + model_without_ddp.backbone.pos_embed)
+
+                q = model_without_ddp.backbone.blocks(x)
+                q = model_without_ddp.backbone.norm(q)[:, 0].clone()
+                ViT_Features[self.task] = torch.concat((ViT_Features[self.task], q))
+
+            for self.epoch in range(self.epochs):
+                sampler_train.set_epoch(self.epoch)
+                self.train(loader_train, model, criterion, optimizer)
+                print('')
+                scheduler.step()
+
+            for self.test in range(self.task + 1):
+                loader_val = self.set_task(self.dataset_val, sampler_val, self.test) 
+                self.validate(loader_val, model, criterion)
+
+            self.epoch = 0
+            optimizer = self.optimizer(model.parameters(), **self.optimizer_args)
+            print('')
+        print("Selection : ",(model_without_ddp._convert_train_task(sampler_train.get_task())-1).tolist())
+        self.save(model_without_ddp, optimizer, scheduler, self.epoch)
+        tsne = TSNE(initial_dims= model_without_ddp.backbone.num_features)
+
+        for n, f in enumerate(ViT_Features):
+            print(f.shape)
+            f = tsne.fit_transform(f.cpu())
+            plt.scatter(f[0],f[1])
+        plt.xlim()
+        plt.ylim()
+        plt.savefig(f"{self.save_path}ViT_Features.png")
+        plt.clf()
+
+        for n, f in enumerate(model_without_ddp.prompt.pool_size):
+            f = tsne.fit_transform(model_without_ddp.prompt.prompts[n].reshape(-1, model_without_ddp.backbone.num_features).cpu())
+            plt.scatter(f[0],f[1])
+        plt.xlim()
+        plt.ylim()
+        plt.savefig(f"{self.save_path}prompts.png")
+        plt.clf()
+
+        return
+    
+    def Single_Task_Train(self):
+        _r = dist.get_rank() if self.distributed else None # means that it is not distributed
+        _w = dist.get_world_size() if self.distributed else None # means that it is not distributed
+
+        sampler_train = CILSampler(self.dataset_train, self.num_tasks, _w, _r, shuffle=True, seed=self.seed)
+        sampler_val   = CILSampler(self.dataset_val  , self.num_tasks, _w, _r, shuffle=False, seed=self.seed)
+        self.batch_size = int(self.batch_size // self.world_size)
+
         sampler_train = CILSampler(self.dataset_train, 1, _w, _r, shuffle=True, seed=self.seed)
         sampler_val   = CILSampler(self.dataset_val  , 1, _w, _r, shuffle=False, seed=self.seed)
         self.batch_size = int(self.batch_size // self.world_size)
@@ -358,6 +463,7 @@ class Imgtrainer():
         criterion = model_without_ddp.loss_fn if self.criterion == 'custom' else self.criterion()
         optimizer = self.optimizer(model.parameters(), **self.optimizer_args)
         scheduler = self.scheduler(optimizer, **self.scheduler_args)
+        self.load(model_without_ddp, optimizer, scheduler, self.epoch)
 
         n_params = sum(p.numel() for p in model_without_ddp.parameters())
         print(f"Total Parameters :\t{n_params}")
@@ -366,7 +472,7 @@ class Imgtrainer():
         print("")
 
         loader_train = self.set_task(self.dataset_train, sampler_train, 0)
-        loader_val = self.set_task(self.dataset_val, sampler_val, 0) 
+        loader_val   = self.set_task(self.dataset_val,   sampler_val,   0) 
         self.task = 0
         self.test = 0
         if not self.training:
@@ -379,6 +485,6 @@ class Imgtrainer():
             print('')
             scheduler.step()
             self.validate(loader_val, model, criterion)
-
+            self.save(model_without_ddp, optimizer, scheduler, self.epoch)
         print('')
         return

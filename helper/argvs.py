@@ -4,6 +4,7 @@ import torch
 import torch.nn as nn
 from torch.utils.data import Dataset
 from torchvision.datasets import CIFAR10, CIFAR100, MNIST, FashionMNIST
+from torchvision.datasets import ImageFolder
 
 from models.dualprompt import DualPrompt
 from models.L2P import L2P
@@ -15,6 +16,9 @@ from models.EViT import EViT
 from models.CertViT import CertViT
 from models.meanL2P import meanL2P
 from models.GradModL2P import GradModL2P
+from models.PenaL2P import PenaL2P
+from models.GL2P import GL2P
+from models.DeuniformL2P import DeuniformL2P
 
 #Functions to parse arguments
 
@@ -39,6 +43,12 @@ def model_parser(model_name : str, args : list):
         return EViT, vars(evit.parse_known_args(args)[0])
     elif model_name == "certvit":
         return CertViT, vars(certvit.parse_known_args(args)[0])
+    elif model_name == "penal2p":
+        return PenaL2P, vars(penal2p.parse_known_args(args)[0])
+    elif model_name == "deuniforml2p":
+        return DeuniformL2P, vars(deuniforml2p.parse_known_args(args)[0])
+    elif model_name == "gl2p":
+        return GL2P, vars(gl2p.parse_known_args(args)[0])
     else:
         raise ValueError("unknown model name {}".format(model_name)[0])
 
@@ -89,6 +99,10 @@ def dataset(args, _data : str) -> Dataset:
         elif _data == 'FashionMNIST':
             args.model_args["class_num"] = 10
             return FashionMNIST
+        elif _data == 'CUB200':
+            args.model_args["class_num"] = 200
+            print("Warning : {} needs to be downloaded manually. Please give correct input of /image folder.".format(_data))
+            return ImageFolder
         else:
             raise ValueError('Dataset {} not supported'.format(_data))
 
@@ -194,6 +208,20 @@ certl2p.add_argument("--reserve-rate",    type=float, default = 0.7)
 # GradModL2P Parser
 gradmodl2p = argparse.ArgumentParser(parents=(l2p,), add_help=False)
 gradmodl2p.add_argument("--gamma",        type=float, default = 0.7)
+
+# PenaL2P Parser
+penal2p = argparse.ArgumentParser(parents=(l2p,), add_help=False)
+penal2p.add_argument("--xi",        type=float, default = 0.1)
+
+
+# PenaL2P Parser
+deuniforml2p = argparse.ArgumentParser(parents=(l2p,), add_help=False)
+deuniforml2p.add_argument("--xi",        type=float, default = 0.1)
+
+# PenaL2P Parser
+gl2p = argparse.ArgumentParser(parents=(l2p,), add_help=False)
+gl2p.add_argument("--_sub_from_prompts", default=False, action= argparse.BooleanOptionalAction)
+gl2p.add_argument("--_Hadamard_Mul",     default=False, action= argparse.BooleanOptionalAction)
 
 # CertL2P Parser
 evit = argparse.ArgumentParser()

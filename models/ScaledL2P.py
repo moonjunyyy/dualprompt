@@ -2,6 +2,7 @@ from cmath import tau
 from models.L2P import L2P
 import torch
 import torch.nn as nn
+import torch.nn.functional as F
 
 class ScaledL2P(L2P):
     def __init__(self, tau = 2, _scale_simmilarity = False, *args, **kwargs):
@@ -10,6 +11,8 @@ class ScaledL2P(L2P):
         self._scale_simmilarity = _scale_simmilarity
     
     def forward(self, inputs : torch.Tensor, **kwargs) -> torch.Tensor:
+
+        self.prompt.prompts.data = F.normalize(self.prompt.prompts.data, dim = -1)
         x = self.backbone.patch_embed(inputs)
 
         B, N, D = x.size()

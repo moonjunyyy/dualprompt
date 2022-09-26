@@ -1,3 +1,4 @@
+from locale import normalize
 from typing import TypeVar
 
 import timm
@@ -16,7 +17,7 @@ class CAL2P(nn.Module):
                  class_num      : int   = 100,
                  backbone_name  : str   = None,
                  lambd          : float = 0.5,
-                 _cls_at_front         : bool  = False,
+                 _cls_at_front         : bool  = True,
                  _batchwise_selection  : bool  = True,
                  _mixed_prompt_order   : bool  = False,
                  _mixed_prompt_token   : bool  = False,
@@ -38,10 +39,9 @@ class CAL2P(nn.Module):
 
         self.mode = True
 
-        self.add_module('queryfnc', timm.create_model(backbone_name, pretrained=True, num_classes=class_num))
         self.add_module('backbone', timm.create_model(backbone_name, pretrained=True, num_classes=class_num))
 
-        for param in self.queryfnc.parameters():
+        for param in self.backbone.parameters():
             param.requires_grad = False
 
         self.backbone.head.weight.requires_grad = True
@@ -56,7 +56,6 @@ class CAL2P(nn.Module):
             _mixed_prompt_order = _mixed_prompt_order,
             _mixed_prompt_token = _mixed_prompt_token)
 
-        self.flag = False
         self.pos_embed = self.backbone.pos_embed.clone().detach()
         self.pos_embed = nn.Parameter(self.pos_embed, requires_grad=_learnable_pos_emb)
         
@@ -71,23 +70,24 @@ class CAL2P(nn.Module):
                 param.requires_grad = False
             for param in self.prompt.parameters():
                 param.requires_grad = True
-
             self.backbone.head.weight.requires_grad = True
             self.backbone.head.bias.requires_grad = True
         else:
             for param in self.backbone.parameters():
                 param.requires_grad = True
             for param in self.prompt.parameters():
-                param.requires_grad = False
+                param.requires_grad = True
+            self.backbone.head.weight.requires_grad = False
+            self.backbone.head.bias.requires_grad = False
 
         x = self.backbone.patch_embed(inputs)
 
         B, N, D = x.size()
-        cls_token = self.queryfnc.cls_token.expand(B, -1, -1)
+        cls_token = self.backbone.cls_token.expand(B, -1, -1)
         t = torch.cat((cls_token, x), dim=1)
-        x = self.queryfnc.pos_drop(t + self.queryfnc.pos_embed)
-        q = self.queryfnc.blocks(x)
-        q = self.queryfnc.norm(q)[:, 0].clone()
+        x = self.backbone.pos_drop(t + self.backbone.pos_embed)
+        q = self.backbone.blocks(x)
+        q = self.backbone.norm(q)[:, 0].clone()
 
         x = self.backbone.pos_drop(t + self.pos_embed)
         if self.mode:    
@@ -115,9 +115,11 @@ class CAL2P(nn.Module):
                 x = x + self.mask
             return x
         else:
-            p = self.prompt.prompts.reshape(-1, D)
+            scale = self.prompt.frequency + self.prompt.counter
+            scale = (scale / scale.sum()).unsqueeze(-1).unsqueeze(-1)
+            p = (self.prompt.prompts * scale).reshape(-1, D)
+            p = p.mean(0).unsqueeze(0)
             p = p.unsqueeze(0).expand(B, -1, -1)
-            p = p.mean(1).unsqueeze(1)
 
             if self._cls_at_front:
                 x = torch.cat((x[:,0].unsqueeze(1), p, x[:,1:]), dim=1)
@@ -144,25 +146,9 @@ class CAL2P(nn.Module):
             return L_dd - self.lambd * self.simmilarity
         else:
             L_ce = F.mse_loss(self.mean_prompts, torch.zeros_like(self.mean_prompts))
-            return L_ce
+            return L_ce + self.prompt.prompts.reshape(-1, self.backbone.num_features).mean(1).norm(dim=-1)
 
     def _convert_train_task(self, task : torch.Tensor, **kwargs):
-        if self.flag:
-            for param in self.prompt.parameters():
-                param.requires_grad = False
-            for param in self.backbone.parameters():
-                param.requires_grad = True
-                
-            for e in range(self.epes):
-                p = self.prompt.prompts.reshape(-1, self.prompt.dimention).mean(1).unsqueeze(1)
-
-
-            for param in self.prompt.parameters():
-                param.requires_grad = True
-            for param in self.backbone.parameters():
-                param.requires_grad = False
-                
-                pass
         self.mask += -torch.inf
         self.mask[task.to(self.mask.device)] = 0
         return self.prompt.update()

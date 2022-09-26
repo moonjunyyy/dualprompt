@@ -1,9 +1,7 @@
 from typing import TypeVar
-
 import timm
 import torch
 import torch.nn as nn
-
 T = TypeVar('T', bound = 'nn.Module')
 
 class EViT(nn.Module):
@@ -31,6 +29,7 @@ class EViT(nn.Module):
 
     def feature_forward(self, x : torch.Tensor, **kwargs) -> torch.Tensor:
         for n, block in enumerate(self.backbone.blocks):
+            
             B, N, C = x.shape
             K = int(N * self.reserve_rate)
             layer = ((self.selection_layer == n).nonzero()).squeeze()
@@ -41,11 +40,10 @@ class EViT(nn.Module):
             
             attn = (q @ k.transpose(-2, -1)) * block.attn.scale
             attn = attn.softmax(dim=-1)
-            attn = block.attn.attn_drop(attn)
-
             if layer.numel() != 0:
-                importance = attn[:, :, 0, 1:].clone().sum(dim = 1)
+                importance = attn[:, :, 0, 1:].sum(dim = 1)
                 pass
+            attn = block.attn.attn_drop(attn)
 
             norm = (attn @ v).transpose(1, 2).reshape(B, N, C)
             norm = block.attn.proj(norm)
@@ -56,7 +54,7 @@ class EViT(nn.Module):
                 cls_tkn = x[:, 0].unsqueeze(1)
                 img_tkn = x[:, 1:]
                 _, idx = importance.topk(K, largest = True, sorted = True)
-                _, stl = importance.topk(N - K, largest = True, sorted = True)
+                _, stl = importance.topk(N - K, largest = False, sorted = True)
                 stl_tkn = img_tkn.gather(1, stl.unsqueeze(-1).expand(-1, -1, C)).sum(1).unsqueeze(1)
                 img_tkn = img_tkn.gather(1, idx.unsqueeze(-1).expand(-1, -1, C))
                 x = torch.concat((cls_tkn, img_tkn, stl_tkn), dim = 1)

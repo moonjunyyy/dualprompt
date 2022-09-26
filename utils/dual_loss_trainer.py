@@ -297,8 +297,9 @@ class Dual_Loss_Imgtrainer():
             model._set_static_graph()
             model_without_ddp = model.module
         criterion  = model_without_ddp.loss_fn
-        optimizer1 = torch.optim.SGD (model.backbone.parameters(), lr = 0.001)
-        optimizer2 = torch.optim.Adam(model.prompt.parameters(),   lr = 0.015, betas=(0.9,0.999))
+        optimizer1 = torch.optim.SGD (model.backbone.parameters(), lr = 1e-5)
+        optimizer2 = torch.optim.Adam([{'params' : model.prompt.parameters()},
+                                       {'params' : model.backbone.head.parameters()}],   lr = 0.015, betas=(0.9,0.999))
         scheduler  = torch.optim.lr_scheduler.ConstantLR(optimizer2, 1.0)
 
         n_params = sum(p.numel() for p in model_without_ddp.parameters())
@@ -316,20 +317,20 @@ class Dual_Loss_Imgtrainer():
                 model_without_ddp.mode = True
                 sampler_train.set_epoch(self.epoch)
                 self.train(loader_train, model, criterion, optimizer2)
-
-                
-                model_without_ddp.mode = False
-                self.train(loader_train, model, criterion, optimizer1)
                 print('')
-                scheduler.step()
-
+            
+            model_without_ddp.mode = False
+            self.train(loader_train, model, criterion, optimizer1)
+            print('')
+            scheduler.step()
             for self.test in range(self.task + 1):
                 model_without_ddp.mode = True
                 loader_val = self.set_task(self.dataset_val, sampler_val, self.test) 
                 self.validate(loader_val, model, criterion)
 
             self.epoch = 0
-            optimizer = self.optimizer(model.parameters(), **self.optimizer_args)
+            optimizer1 = torch.optim.SGD (model.backbone.parameters(), lr = 0.001)
+            optimizer2 = torch.optim.Adam(model.prompt.parameters(),   lr = 0.015, betas=(0.9,0.999))
             print('')
         print("Selection : ",(model_without_ddp._convert_train_task(sampler_train.get_task())-1).tolist())
         return
