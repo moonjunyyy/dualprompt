@@ -1,18 +1,19 @@
+import builtins
 import os
 import random
 import time
 
+import matplotlib.pyplot as plt
+import pandas as pd
 import torch
 import torch.backends.cudnn as cudnn
 import torch.distributed as dist
 import torch.multiprocessing as mp
 import torchvision.transforms as transforms
-from torchvision.datasets import ImageFolder
 from helper.metric import AverageMeter, ProgressMeter, Summary, accuracy
-import builtins
 from torch.utils.data import DataLoader, Subset, random_split
+from torchvision.datasets import ImageFolder
 from tsne_torch import TorchTSNE as TSNE
-import matplotlib.pyplot as plt
 
 from utils._subset import _Subset
 from utils.sampler import CILSampler
@@ -419,25 +420,26 @@ class Imgtrainer():
             print('')
         print("Selection : ",(model_without_ddp._convert_train_task(sampler_train.get_task())-1).tolist())
         self.save(model_without_ddp, optimizer, scheduler, self.epoch)
-        tsne = TSNE(initial_dims= model_without_ddp.backbone.num_features)
 
+        N, D = ViT_Features[0].shape
+        vec = torch.empty((0, D), device=ViT_Features[0].device)
+        N = 200 # Too much vectors make OOM Problem
         for n, f in enumerate(ViT_Features):
-            print(f.shape)
-            f = tsne.fit_transform(f.cpu())
-            plt.scatter(f[0],f[1])
-        plt.xlim()
-        plt.ylim()
+            vec = torch.concat((vec, f[:N]), dim = 0)
+        vec = TSNE(initial_dims=D).fit_transform(vec)
+        for n in range(len(ViT_Features)):
+            plt.scatter(f[N * n : N * n + 100,0], f[N * n : N * n + 100,1], s=1)
+        plt.axis()
         plt.savefig(f"{self.save_path}ViT_Features.png")
         plt.clf()
-
-        for n, f in enumerate(model_without_ddp.prompt.pool_size):
-            f = tsne.fit_transform(model_without_ddp.prompt.prompts[n].reshape(-1, model_without_ddp.backbone.num_features).cpu())
-            plt.scatter(f[0],f[1])
-        plt.xlim()
-        plt.ylim()
+        
+        P, L, D = model_without_ddp.prompt.prompts.data.shape
+        vec = TSNE(initial_dims=D).fit_transform(model_without_ddp.prompt.prompts.data.reshape(-1, D))
+        for p in range(P):
+            plt.scatter(vec[p*L : (p+1)*L, 0], vec[p*L : (p+1)*L, 1], s=1)
+        plt.axis()
         plt.savefig(f"{self.save_path}prompts.png")
         plt.clf()
-
         return
     
     def Single_Task_Train(self):

@@ -29,7 +29,7 @@ class PrEL2P(nn.Module):
         
         self.add_module('backbone', timm.create_model(backbone_name, pretrained=True, num_classes=class_num))
         num_patches = self.backbone.patch_embed.num_patches
-        self.num_stale   = ((num_patches - int(num_patches * self.reserve_rate)) // selection_size) * selection_size
+        self.num_stale   = ((num_patches + 1 - int((num_patches + 1) * self.reserve_rate)) // selection_size) * selection_size
         self.num_reserve = num_patches - self.num_stale
         self.lambd = lambd
 
@@ -51,27 +51,31 @@ class PrEL2P(nn.Module):
             r = x
             x = block.norm1(x)
 
-            msa   = block.attn
-            qkv = msa.qkv(x).reshape(B, N, 3, msa.num_heads, C // msa.num_heads).permute(2, 0, 3, 1, 4)
+            K = int(N * self.reserve_rate)
+            layer = ((self.selection_layer == n).nonzero()).squeeze()
+
+            norm = block.norm1(x)
+            #Attention Layer
+            qkv = block.attn.qkv(norm).reshape(B, N, 3, block.attn.num_heads, C // block.attn.num_heads).permute(2, 0, 3, 1, 4)
             q, k, v = qkv[0], qkv[1], qkv[2]   # make torchscript happy (cannot use tensor as tuple)
-
-            attn = (q @ k.transpose(-2, -1)) * msa.scale
+            
+            attn = (q @ k.transpose(-2, -1)) * block.attn.scale
             attn = attn.softmax(dim=-1)
-            attn = msa.attn_drop(attn)
+            if layer.numel() != 0:
+                importance = attn[:, :, 0, 1:].clone().sum(dim = 1)
+                pass
+            attn = block.attn.attn_drop(attn)
+
+            norm = (attn @ v).transpose(1, 2).reshape(B, N, C)
+            norm = block.attn.proj(norm)
+            norm = block.attn.proj_drop(norm)
+            #!Attention Layer
+            x = x + block.drop_path(norm)
 
             layer = ((self.selection_layer == n).nonzero()).squeeze()
             if layer.numel() != 0:
-                importance = attn[:, :, 0, :].mean(dim = 1).clone()
-
-            x = (attn @ v).transpose(1, 2).reshape(B, -1, C)
-            x = msa.proj(x)
-            x = msa.proj_drop(x)
-            x = r + block.drop_path(x)
-
-            layer = ((self.selection_layer == n).nonzero()).squeeze()
-            if layer.numel() != 0:
-                i, idx = importance[:,1:].clone().topk(self.num_stale, dim = -1, sorted=False, largest=False)
-                x[:,idx + 1] = prompts[layer].squeeze() + self.pos_embed.expand(B,-1,-1)[:,idx + 1]
+                _, idx = importance.topk(N - K, largest = False, sorted = False)
+                x[:,idx + 1] = prompts[layer].clone().squeeze() + self.pos_embed.expand(B,-1,-1)[:,idx + 1]
             x = x + block.drop_path(block.mlp(block.norm2(x)))
         x = self.backbone.norm(x)
         return x

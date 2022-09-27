@@ -46,7 +46,7 @@ class CertViT(nn.Module):
             if layer.numel() != 0:
                 evidence = F.relu(attn)
                 strength = (evidence + 1).sum(-1)
-                uncertainty = (N / strength).mean(1)[:,1:]
+                uncertainty = (N / strength).mean(1)[:,1:].clone()
                 pass
 
             norm = (attn @ v).transpose(1, 2).reshape(B, N, C)
@@ -55,14 +55,16 @@ class CertViT(nn.Module):
 
             x = x + block.drop_path(norm)
             if layer.numel() != 0:
-                cls_tkn = x[:, 0].unsqueeze(1)
-                img_tkn = x[:, 1:]
+                cls_tkn = x[:, 0].clone().unsqueeze(1)
+                img_tkn = x[:, 1:].clone()
                 _, idx = uncertainty.topk(K, largest = True, sorted = True)
                 _, stl = uncertainty.topk(N - K, largest = False, sorted = True)
                 stl_tkn = img_tkn.gather(1, stl.unsqueeze(-1).expand(-1, -1, C)).sum(1).unsqueeze(1)
+                stl_tkn = (stl_tkn * uncertainty.gather(1, stl).unsqueeze(-1).expand(-1,-1,C)).sum(1).unsqueeze(1)
                 img_tkn = img_tkn.gather(1, idx.unsqueeze(-1).expand(-1, -1, C))
                 x = torch.concat((cls_tkn, img_tkn, stl_tkn), dim = 1)
             x = x + block.drop_path(block.mlp(block.norm2(x)))
+        x = self.backbone.norm(x)
         return x
 
     def forward(self, x : torch.Tensor, **kwargs) -> torch.Tensor:

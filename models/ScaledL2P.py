@@ -1,4 +1,3 @@
-from cmath import tau
 from models.L2P import L2P
 import torch
 import torch.nn as nn
@@ -12,7 +11,7 @@ class ScaledL2P(L2P):
     
     def forward(self, inputs : torch.Tensor, **kwargs) -> torch.Tensor:
 
-        self.prompt.prompts.data = F.normalize(self.prompt.prompts.data, dim = -1)
+        #self.prompt.prompts.data = F.normalize(self.prompt.prompts.data, dim = -1)
         x = self.backbone.patch_embed(inputs)
 
         B, N, D = x.size()

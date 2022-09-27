@@ -37,12 +37,11 @@ class EViT(nn.Module):
             #Attention Layer
             qkv = block.attn.qkv(norm).reshape(B, N, 3, block.attn.num_heads, C // block.attn.num_heads).permute(2, 0, 3, 1, 4)
             q, k, v = qkv[0], qkv[1], qkv[2]   # make torchscript happy (cannot use tensor as tuple)
-            
+
             attn = (q @ k.transpose(-2, -1)) * block.attn.scale
             attn = attn.softmax(dim=-1)
             if layer.numel() != 0:
-                importance = attn[:, :, 0, 1:].clone().sum(dim = 1)
-                pass
+                importance = attn[:, :, 0, 1:].clone().mean(dim = 1)
             attn = block.attn.attn_drop(attn)
 
             norm = (attn @ v).transpose(1, 2).reshape(B, N, C)
@@ -52,13 +51,13 @@ class EViT(nn.Module):
             x = x + block.drop_path(norm)
 
             if layer.numel() != 0:
-                cls_tkn = x[:, 0 ].clone().unsqueeze(1)
-                img_tkn = x[:, 1:].clone()
-                _, idx = importance.topk(K,     largest = True,  sorted = True)
-                _, stl = importance.topk(N - K, largest = False, sorted = False)
-                stl_tkn = img_tkn.gather(1, stl.unsqueeze(-1).expand(-1, -1, C))
-                stl_tkn = (stl_tkn * importance.gather(1, stl)).sum(1).unsqueeze(1)
-                img_tkn = img_tkn.gather(1, idx.unsqueeze(-1).expand(-1, -1, C))
+                cls_tkn = x[:, 0 ].unsqueeze(1)
+                img_tkn = x[:, 1:]
+                _,  idx = importance.topk(K,     largest = True,  sorted = True)
+                im, stl = importance.topk(N - K, largest = False, sorted = True)
+                stl_tkn = img_tkn.gather(1, stl.unsqueeze(-1).expand(-1,-1, C))
+                stl_tkn = (stl_tkn * im.unsqueeze(-1).expand(-1,-1, C)).sum(1).unsqueeze(1)
+                img_tkn = img_tkn.gather(1, idx.unsqueeze(-1).expand(-1,-1, C))
                 x = torch.concat((cls_tkn, img_tkn, stl_tkn), dim = 1)
             x = x + block.drop_path(block.mlp(block.norm2(x)))
         x = self.backbone.norm(x)
