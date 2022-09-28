@@ -81,7 +81,7 @@ class PenaL2P(nn.Module):
 
         self.simmilarity   =  s.sum()
         self.unsimmilarity = us.sum()
-        p = (p * s).contiguous().view(B, self.selection_size * self.prompt_len, D)
+        p = (p * s.unsqueeze(-1).unsqueeze(-1).expand(-1, -1, self.prompt_len, D)).contiguous().view(B, self.selection_size * self.prompt_len, D)
         p = p + self.pos_embed[:,0].clone().expand(self.selection_size * self.prompt_len, -1)
 
         x = self.backbone.pos_drop(t + self.pos_embed)

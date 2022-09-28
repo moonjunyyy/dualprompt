@@ -423,12 +423,12 @@ class Imgtrainer():
 
         N, D = ViT_Features[0].shape
         vec = torch.empty((0, D), device=ViT_Features[0].device)
-        N = 200 # Too much vectors make OOM Problem
+        N = 500 # Too much vectors make OOM Problem
         for n, f in enumerate(ViT_Features):
             vec = torch.concat((vec, f[:N]), dim = 0)
         vec = TSNE(initial_dims=D).fit_transform(vec)
         for n in range(len(ViT_Features)):
-            plt.scatter(f[N * n : N * n + 100,0], f[N * n : N * n + 100,1], s=1)
+            plt.scatter(vec[N * n : N * n + 100,0], vec[N * n : N * n + 100,1], s=1)
         plt.axis()
         plt.savefig(f"{self.save_path}ViT_Features.png")
         plt.clf()
