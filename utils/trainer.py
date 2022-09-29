@@ -16,7 +16,7 @@ from torchvision.datasets import ImageFolder
 from tsne_torch import TorchTSNE as TSNE
 
 from utils._subset import _Subset
-from utils.sampler import CILSampler
+from utils.sampler import CILSampler, CIL_Negative_Sampler
 
 ########################################################################################################################
 # This is trainer with a DistributedDataParallel                                                                       #
@@ -37,7 +37,7 @@ class Imgtrainer():
                  batch_size, step_size, epochs, log_frequency,
                  task_governor, num_tasks,
                  dataset, num_workers, dataset_path, save_path,
-                 seed, device, pin_mem, use_amp, debug,
+                 seed, device, pin_mem, use_amp, use_tf, debug,
                  world_size, dist_url, dist_backend, rank, local_rank,
                  *args, **kwargs) -> None:
         
@@ -65,6 +65,7 @@ class Imgtrainer():
         self.seed         = seed
         self.device       = device
         self.debug        = debug
+        self.use_tf       = use_tf
 
         self.rank         = rank
         self.dist_backend = dist_backend
@@ -146,6 +147,8 @@ class Imgtrainer():
             self.CIL_Train()
         elif self.task_governor == "CIL_tsne":
             self.CIL_Train_with_TSNE()
+        elif self.task_governor == "CIL_contrastive":
+            self.CIL_Train_contrastive()
         else:
             self.Single_Task_Train()
     
@@ -180,6 +183,57 @@ class Imgtrainer():
             with torch.cuda.amp.autocast(enabled=self.use_amp):
                 # compute output
                 output = model(images)
+                loss = criterion(output, target)
+                # measure accuracy and record loss
+                acc1, acc5 = accuracy(output, target, topk=(1, 5))
+                losses.update(loss.item(), images.size(0))
+                top1.update(acc1[0], images.size(0))
+                top5.update(acc5[0], images.size(0))
+                # compute gradient and do SGD step
+                self.scaler.scale(loss).backward()
+            # measure elapsed time
+            batch_time.update(time.time() - end)
+            end = time.time()
+            if i % self.step_size == self.step_size - 1 or i == len(loader) - 1:
+                self.scaler.step(optimizer)
+                optimizer.zero_grad()
+                self.scaler.update()
+            if i % log_interval == log_interval - 1 or i == len(loader) - 1:
+                progress.display(i + 1)
+        if self.use_tf:
+            progress.write_summary(epoch = self.task * self. epochs + self.epoch, save_path = self.save_path, prefix='Train/')
+                
+    def train_contrastive(self, loader, pos_loader, neg_loader, model, criterion, optimizer):
+        batch_time = AverageMeter('Time', ':6.3f')
+        data_time  = AverageMeter('Data', ':6.3f')
+        losses     = AverageMeter('Loss', ':.4e')
+        top1       = AverageMeter('Acc@1', ':6.2f')
+        top5       = AverageMeter('Acc@5', ':6.2f')
+        progress   = ProgressMeter(
+            len(loader),
+            [batch_time, data_time, losses, top1, top5],
+            prefix="Epoch: [{}]".format(self.epoch + 1))
+        # switch to train mode
+        model.train()
+        log_interval = int(len(loader) // self.log_frequency)
+        end = time.time()
+        pos_sample = iter(pos_loader)
+        neg_sample = iter(neg_loader)
+        
+        for i, (images, target) in enumerate(loader):
+            # measure data loading time
+            data_time.update(time.time() - end)
+            images, target = images.to(self.device), target.to(self.device)
+
+            pos_img, _ = next(pos_sample)
+            neg_img, _ = next(neg_sample)
+
+            pos_img = pos_img.to(self.device)
+            neg_img = neg_img.to(self.device)
+
+            with torch.cuda.amp.autocast(enabled=self.use_amp):
+                # compute output
+                output = model(images, pos_img, neg_img)
                 loss = criterion(output, target)
                 # measure accuracy and record loss
                 acc1, acc5 = accuracy(output, target, topk=(1, 5))
@@ -234,9 +288,11 @@ class Imgtrainer():
             top1.all_reduce()
             top5.all_reduce()
         progress.display_summary()
-        progress.write_summary(epoch = self.task, save_path = self.save_path, prefix='Test/task{}/'.format(self.test))
+        if self.use_tf:
+            progress.write_summary(epoch = self.task, save_path = self.save_path, prefix='Test/task{}/'.format(self.test))
 
         return top1.avg
+
     def save_on_master(self):
         if self.is_main_process():
             self.save(self)
@@ -426,22 +482,80 @@ class Imgtrainer():
         N = 500 # Too much vectors make OOM Problem
         for n, f in enumerate(ViT_Features):
             vec = torch.concat((vec, f[:N]), dim = 0)
-        vec = TSNE(initial_dims=D).fit_transform(vec)
+        vec = TSNE(initial_dims=D).fit_transform(torch.nn.functional.normalize(vec))
+        pd.DataFrame(vec).to_csv(f"{self.save_path}ViT_Features.csv")
         for n in range(len(ViT_Features)):
-            plt.scatter(vec[N * n : N * n + 100,0], vec[N * n : N * n + 100,1], s=1)
+            plt.scatter(vec[N * n : N * (n + 1),0], vec[N * n : N * (n + 1),1], s=1)
         plt.axis()
         plt.savefig(f"{self.save_path}ViT_Features.png")
         plt.clf()
         
-        P, L, D = model_without_ddp.prompt.prompts.data.shape
-        vec = TSNE(initial_dims=D).fit_transform(model_without_ddp.prompt.prompts.data.reshape(-1, D))
+        P, L, D = model_without_ddp.prompt.prompts.shape
+        vec = TSNE(initial_dims=D).fit_transform(model_without_ddp.prompt.prompts.reshape(-1, D) / D)
+        pd.DataFrame(vec).to_csv(f"{self.save_path}prompts.csv")
         for p in range(P):
             plt.scatter(vec[p*L : (p+1)*L, 0], vec[p*L : (p+1)*L, 1], s=1)
         plt.axis()
         plt.savefig(f"{self.save_path}prompts.png")
         plt.clf()
         return
-    
+
+    def CIL_Train_contrastive(self):
+        _r = dist.get_rank() if self.distributed else None # means that it is not distributed
+        _w = dist.get_world_size() if self.distributed else None # means that it is not distributed
+        
+        sampler_train = CILSampler(self.dataset_train, self.num_tasks, _w, _r, shuffle=True, seed=self.seed)
+        sampler_val   = CILSampler(self.dataset_val  , self.num_tasks, _w, _r, shuffle=False, seed=self.seed)
+        sampler_positive = CILSampler(self.dataset_train, self.num_tasks, _w, _r, shuffle=True, seed=self.seed + 1)
+        sampler_negative = CIL_Negative_Sampler(self.dataset_train, self.num_tasks, _w, _r, shuffle=True, seed=self.seed)
+        self.batch_size = int(self.batch_size // self.world_size)
+        
+        print("Building model...")
+        model = self.model(**self.model_args)
+        model.to(self.device)
+        model_without_ddp = model
+        if self.distributed:
+            model = torch.nn.parallel.DistributedDataParallel(model)
+            model._set_static_graph()
+            model_without_ddp = model.module
+        criterion = model_without_ddp.loss_fn if self.criterion == 'custom' else self.criterion()
+        optimizer = self.optimizer(model.parameters(), **self.optimizer_args)
+        scheduler = self.scheduler(optimizer, **self.scheduler_args)
+
+        self.load(model_without_ddp, optimizer, scheduler, self.epoch)
+
+        n_params = sum(p.numel() for p in model_without_ddp.parameters())
+        print(f"Total Parameters :\t{n_params}")
+        n_params = sum(p.numel() for p in model_without_ddp.parameters() if p.requires_grad)
+        print(f"Learnable Parameters :\t{n_params}")
+        print("")
+
+        ViT_Features = [torch.empty((0, model_without_ddp.backbone.num_features), device=self.device) for i in range(self.num_tasks)]
+
+        for self.task in range(self.num_tasks):
+            loader_train = self.set_task(self.dataset_train, sampler_train, self.task)
+            loader_positive = self.set_task(self.dataset_train, sampler_positive, self.task)
+            loader_negative = self.set_task(self.dataset_train, sampler_negative, self.task)
+            print("Selection : ",(model_without_ddp._convert_train_task(sampler_train.get_task()).to(torch.int) - 1).tolist())
+            print(f"Training for task {self.task} : {sampler_train.get_task().tolist()}")
+            
+            for self.epoch in range(self.epochs):
+                sampler_train.set_epoch(self.epoch)
+                self.train_contrastive(loader_train, loader_positive, loader_negative, model, criterion, optimizer)
+                print('')
+                scheduler.step()
+
+            for self.test in range(self.task + 1):
+                loader_val = self.set_task(self.dataset_val, sampler_val, self.test) 
+                self.validate(loader_val, model, criterion)
+
+            self.epoch = 0
+            optimizer = self.optimizer(model.parameters(), **self.optimizer_args)
+            print('')
+        print("Selection : ",(model_without_ddp._convert_train_task(sampler_train.get_task())-1).tolist())
+        self.save(model_without_ddp, optimizer, scheduler, self.epoch)
+        return
+
     def Single_Task_Train(self):
         _r = dist.get_rank() if self.distributed else None # means that it is not distributed
         _w = dist.get_world_size() if self.distributed else None # means that it is not distributed
@@ -450,10 +564,6 @@ class Imgtrainer():
         sampler_val   = CILSampler(self.dataset_val  , self.num_tasks, _w, _r, shuffle=False, seed=self.seed)
         self.batch_size = int(self.batch_size // self.world_size)
 
-        sampler_train = CILSampler(self.dataset_train, 1, _w, _r, shuffle=True, seed=self.seed)
-        sampler_val   = CILSampler(self.dataset_val  , 1, _w, _r, shuffle=False, seed=self.seed)
-        self.batch_size = int(self.batch_size // self.world_size)
-        
         print("Building model...")
         model = self.model(**self.model_args)
         model.to(self.device)
@@ -490,3 +600,40 @@ class Imgtrainer():
             self.save(model_without_ddp, optimizer, scheduler, self.epoch)
         print('')
         return
+        
+        batch_time = AverageMeter('Time', ':6.3f', Summary.NONE)
+        losses = AverageMeter('Loss', ':.4e', Summary.NONE)
+        top1 = AverageMeter('Acc@1', ':6.2f', Summary.AVERAGE)
+        top5 = AverageMeter('Acc@5', ':6.2f', Summary.AVERAGE)
+
+        progress = ProgressMeter(
+            len(loader),
+            [batch_time, losses, top1, top5],
+            prefix='Test: ')
+
+        # switch to evaluate mode
+        model.eval()
+        with torch.no_grad():
+            end = time.time()
+            for i, (images, target) in enumerate(loader):
+                with torch.cuda.amp.autocast(enabled=self.use_amp):
+                    images, target = images.to(self.device), target.to(self.device)
+                    # compute output
+                    output = model(images)
+                    loss = criterion(output, target)
+                    # measure accuracy and record loss
+                    acc1, acc5 = accuracy(output, target, topk=(1, 5))
+                    losses.update(loss.item(), images.size(0))
+                    top1.update(acc1[0], images.size(0))
+                    top5.update(acc5[0], images.size(0))
+                    # measure elapsed time
+                    batch_time.update(time.time() - end)
+                    end = time.time()
+        if self.distributed:
+            dist.barrier()
+            top1.all_reduce()
+            top5.all_reduce()
+        progress.display_summary()
+        progress.write_summary(epoch = self.task, save_path = self.save_path, prefix='Test/task{}/'.format(self.test))
+
+        return top1.avg

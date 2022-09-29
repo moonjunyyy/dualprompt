@@ -19,6 +19,7 @@ from models.GradModL2P import GradModL2P
 from models.PenaL2P import PenaL2P
 from models.GL2P import GL2P
 from models.DeuniformL2P import DeuniformL2P
+from models.ContrastiveL2P import ContrastiveL2P
 
 #Functions to parse arguments
 
@@ -47,6 +48,8 @@ def model_parser(model_name : str, args : list):
         return PenaL2P, vars(penal2p.parse_known_args(args)[0])
     elif model_name == "deuniforml2p":
         return DeuniformL2P, vars(deuniforml2p.parse_known_args(args)[0])
+    elif model_name == "contrastivel2p":
+        return ContrastiveL2P, vars(l2p.parse_known_args(args)[0])
     elif model_name == "gl2p":
         return GL2P, vars(gl2p.parse_known_args(args)[0])
     else:
@@ -149,6 +152,7 @@ parser.add_argument("--seed"    , type=int, default=None, help="manually set ran
 parser.add_argument("--device"  , type=str, default='cuda', help="device to use for training/testing")
 parser.add_argument("--pin-mem" , default=False, action= argparse.BooleanOptionalAction, help="use pin memory for data loader")
 parser.add_argument("--use-amp" , default=False, action= argparse.BooleanOptionalAction, help="use amp for fp16")
+parser.add_argument("--use-tf"  , default=False, action= argparse.BooleanOptionalAction, help="use tensorboard")
 parser.add_argument("--debug"   , default=False, action= argparse.BooleanOptionalAction, help="in debug mode, program will shows more information")
 
 # DDP configs:
