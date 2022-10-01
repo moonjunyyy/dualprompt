@@ -16,11 +16,14 @@ class L2P(nn.Module):
                  class_num      : int   = 100,
                  backbone_name  : str   = None,
                  lambd          : float = 0.5,
-                 _cls_at_front         : bool  = False,
-                 _batchwise_selection  : bool  = True,
-                 _mixed_prompt_order   : bool  = False,
-                 _mixed_prompt_token   : bool  = False,
-                 _learnable_pos_emb    : bool  = False,
+                 tau            : float = 0.5,
+                 xi             : float = 0.1,
+                 _batchwise_selection  : bool = True,
+                 _diversed_selection   : bool = True,
+                 _scale_prompts        : bool = True,
+                 _unsim_penalty        : bool = True,
+                 _scale_simmilarity    : bool = True,
+                 _update_per_iter      : bool = False,
                  **kwargs):
 
         super().__init__()
@@ -30,12 +33,17 @@ class L2P(nn.Module):
         if pool_size < selection_size:
             raise ValueError('pool_size must be larger than selection_size')
 
-        self.prompt_len = prompt_len
+        self.prompt_len     = prompt_len
         self.selection_size = selection_size
         self.lambd = lambd
+        self.tau   = tau
+        self.xi    = xi
         self._batchwise_selection = _batchwise_selection
+        self._scale_prompts       = _scale_prompts
+        self._unsim_penalty       = _unsim_penalty
+        self._scale_simmilarity   = _scale_simmilarity
+        self._update_per_iter     = _update_per_iter
         self.class_num = class_num
-        self._cls_at_front = _cls_at_front
 
         self.add_module('backbone', timm.create_model(backbone_name, pretrained=True, num_classes=class_num))
         for param in self.backbone.parameters():
@@ -48,16 +56,14 @@ class L2P(nn.Module):
             selection_size,
             prompt_len,
             self.backbone.num_features,
+            _diversed_selection  = _diversed_selection,
             _batchwise_selection = _batchwise_selection,
-            _mixed_prompt_order = _mixed_prompt_order,
-            _mixed_prompt_token = _mixed_prompt_token)
+            _get_unsimmilarity   = _unsim_penalty)
 
-        self.pos_embed = self.backbone.pos_embed.clone().detach()
-        self.pos_embed = nn.Parameter(self.pos_embed, requires_grad=_learnable_pos_emb)
-        
         self.register_buffer('simmilarity', torch.zeros(1))
+        self.register_buffer('unsimmilarity', torch.zeros(1))
         self.register_buffer('mask', torch.zeros(class_num))
-        
+    
     def forward(self, inputs : torch.Tensor, **kwargs) -> torch.Tensor:
         x = self.backbone.patch_embed(inputs)
 
@@ -69,34 +75,52 @@ class L2P(nn.Module):
         q = self.backbone.blocks(x)
         q = self.backbone.norm(q)[:, 0].clone()
 
-        s, p = self.prompt(q)
-        self.simmilarity = s.sum()
-        p = p.contiguous().view(B, self.selection_size * self.prompt_len, D)
-        p = p + self.pos_embed[:,0].clone().expand(self.selection_size * self.prompt_len, -1)
+        if self._unsim_penalty:
+            s, us, p = self.prompt(q)
+        else:
+            s, p = self.prompt(q)
 
-        x = self.backbone.pos_drop(t + self.pos_embed)
-        if self._cls_at_front:
-            x = torch.cat((x[:,0].unsqueeze(1), p, x[:,1:]), dim=1)
+        if self._scale_simmilarity:
+            freq = F.normalize(self.prompt.frequency.reciprocal(), p=1, dim=-1)
+            self.simmilarity   =  (s * freq.repeat(B, 1).gather(1, self.prompt.topk)).sum()
+            if self._unsim_penalty:
+                self.unsimmilarity = (us * freq.repeat(B, 1).gather(1, self.prompt.nonk)).sum()
+        else:
+            self.simmilarity   =  s.sum()
+            if self._unsim_penalty:
+                self.unsimmilarity = us.sum()
+
+            
+        if self._scale_prompts :
+            scale = ((s - 1) * self.tau).exp()
+            p = (p * scale.unsqueeze(-1).unsqueeze(-1).expand(-1, -1, self.prompt_len, D)).contiguous().view(B, self.selection_size * self.prompt_len, D)
         else :
-            x = torch.cat((p, x), dim=1)
+            p = p.contiguous().view(B, self.selection_size * self.prompt_len, D)
+        p = p + self.backbone.pos_embed[:,0].clone().expand(self.selection_size * self.prompt_len, -1)
+
+        x = self.backbone.pos_drop(t + self.backbone.pos_embed)
+        x = torch.cat((x[:,0].unsqueeze(1), p, x[:,1:]), dim=1)
 
         x = self.backbone.blocks(x)
         x = self.backbone.norm(x)
 
-        if self._cls_at_front:
-            x = x[:, 1:self.selection_size * self.prompt_len + 1].clone()
-        else :
-            x = x[:, :self.selection_size * self.prompt_len].clone()
+        x = x[:, 1:self.selection_size * self.prompt_len + 1].clone()
         x = x.mean(dim=1)
         x = self.backbone.head(x)
+
+        if self._update_per_iter:
+            self.prompt.update()
 
         if self.training:
             x = x + self.mask
         return x
     
     def loss_fn(self, output, target):
-        B, C = output.size() 
-        return F.cross_entropy(output, target) - self.lambd * self.simmilarity
+        B, C = output.size()
+        if self._unsim_penalty:
+            return F.cross_entropy(output, target) - self.lambd * self.simmilarity + self.xi * self.unsimmilarity
+        else :
+            return F.cross_entropy(output, target) - self.lambd * self.simmilarity
 
     def _convert_train_task(self, task : torch.Tensor, **kwargs):
         self.mask += -torch.inf

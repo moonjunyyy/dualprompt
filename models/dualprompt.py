@@ -30,6 +30,7 @@ class DualPrompt(L2P):
 
         self.register_buffer('pos_g_prompt', torch.tensor(pos_g_prompt, dtype= torch.int64))
         self.register_buffer('pos_e_prompt', torch.tensor(pos_e_prompt, dtype= torch.int64))
+        
         self.len_g_prompt = len_g_prompt
         self.len_e_prompt = len_e_prompt
         g_pool   = 1

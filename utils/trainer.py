@@ -76,6 +76,7 @@ class Imgtrainer():
 
         if "WORLD_SIZE" in os.environ:
             self.world_size  = int(os.environ["WORLD_SIZE"])
+            self.world_size  = self.world_size * self.ngpus_per_nodes
         else:
             self.world_size  = self.world_size * self.ngpus_per_nodes
         self.distributed     = self.world_size > 1

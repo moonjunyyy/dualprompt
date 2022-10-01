@@ -8,17 +8,10 @@ from torchvision.datasets import ImageFolder
 
 from models.dualprompt import DualPrompt
 from models.L2P import L2P
-from models.EL2P import EL2P
-from models.ScaledL2P import ScaledL2P
-from models.PrEL2P import PrEL2P
-from models.CertL2P import CertL2P
 from models.EViT import EViT
 from models.CertViT import CertViT
-from models.meanL2P import meanL2P
-from models.GradModL2P import GradModL2P
-from models.PenaL2P import PenaL2P
-from models.GL2P import GL2P
-from models.DeuniformL2P import DeuniformL2P
+from models.PrEL2P import PrEL2P
+from models.CertL2P import CertL2P
 from models.ContrastiveL2P import ContrastiveL2P
 
 #Functions to parse arguments
@@ -28,30 +21,16 @@ def model_parser(model_name : str, args : list):
         return DualPrompt, vars(dualprompt.parse_known_args(args)[0])
     elif model_name == "l2p":
         return L2P, vars(l2p.parse_known_args(args)[0])
-    elif model_name == "meanl2p":
-        return meanL2P, vars(l2p.parse_known_args(args)[0])
-    elif model_name == "el2p":
-        return EL2P, vars(el2p.parse_known_args(args)[0])
-    elif model_name == "certl2p":
-        return CertL2P, vars(certl2p.parse_known_args(args)[0])
-    elif model_name == "scaledl2p":
-        return ScaledL2P, vars(scaledl2p.parse_known_args(args)[0])
-    elif model_name == "prel2p":
-        return PrEL2P, vars(prel2p.parse_known_args(args)[0])
-    elif model_name == "gradmodl2p":
-        return GradModL2P, vars(gradmodl2p.parse_known_args(args)[0])
     elif model_name == "evit":
         return EViT, vars(evit.parse_known_args(args)[0])
     elif model_name == "certvit":
         return CertViT, vars(certvit.parse_known_args(args)[0])
-    elif model_name == "penal2p":
-        return PenaL2P, vars(penal2p.parse_known_args(args)[0])
-    elif model_name == "deuniforml2p":
-        return DeuniformL2P, vars(deuniforml2p.parse_known_args(args)[0])
+    elif model_name == "certl2p":
+        return CertL2P, vars(certl2p.parse_known_args(args)[0])
+    elif model_name == "prel2p":
+        return PrEL2P, vars(prel2p.parse_known_args(args)[0])
     elif model_name == "contrastivel2p":
         return ContrastiveL2P, vars(l2p.parse_known_args(args)[0])
-    elif model_name == "gl2p":
-        return GL2P, vars(gl2p.parse_known_args(args)[0])
     else:
         raise ValueError("unknown model name {}".format(model_name)[0])
 
@@ -178,62 +157,37 @@ dualprompt.add_argument("--prompt-func"  , type=str)
 
 # L2P Parser
 l2p = argparse.ArgumentParser(add_help=False)
-l2p.add_argument("--backbone-name",        type=str)
-l2p.add_argument("--pool-size",            type=int, default=10)
-l2p.add_argument("--selection-size",       type=int, default=5)
-l2p.add_argument("--prompt-len",           type=int, default=5)
-l2p.add_argument("--lambda",               type=float, default=0.5)
-l2p.add_argument("--_cls-at-front" ,       default=True,  action= argparse.BooleanOptionalAction, help="set class token at front of prompt")
-l2p.add_argument("--_batchwise-selection", default=True,  action= argparse.BooleanOptionalAction, help="batchwise selection for")
-l2p.add_argument("--_mixed-prompt-order",  default=False, action= argparse.BooleanOptionalAction, help="randomize the order of prompt")
-l2p.add_argument("--_mixed-prompt-token",  default=False, action= argparse.BooleanOptionalAction, help="randomize the order of prompt")
-l2p.add_argument("--_learnable-pos-emb",   default=False,  action= argparse.BooleanOptionalAction, help="randomize the order of prompt")
-
-# ScaledL2P Parser
-scaledl2p = argparse.ArgumentParser(parents=(l2p,), add_help=False)
-scaledl2p.add_argument("--tau",                default=1.0, type=float)
-scaledl2p.add_argument("--_scale_simmilarity", default=False, action= argparse.BooleanOptionalAction, help="randomize the order of prompt")
-
-# EL2P Parser
-el2p = argparse.ArgumentParser(parents=(l2p,), add_help=False)
-el2p.add_argument("--selection-layer",    type=int, default = [3,6,9], nargs='+')
-el2p.add_argument("--reserve-rate",       type=float, default = 0.7)
-
-# EL2P Parser
-prel2p = argparse.ArgumentParser(parents=(l2p,), add_help=False)
-prel2p.add_argument("--selection-layer",  type=int, default = [3,6,9], nargs='+')
-prel2p.add_argument("--reserve-rate",     type=float, default = 0.7)
+l2p.add_argument("--backbone-name",  type=str)
+l2p.add_argument("--pool-size",      type=int,   default=10)
+l2p.add_argument("--selection-size", type=int,   default=5)
+l2p.add_argument("--prompt-len",     type=int,   default=5)
+l2p.add_argument("--lambda",         type=float, default=0.5)
+l2p.add_argument("--xi",             type=float, default=0.1)
+l2p.add_argument("--tau",            type=float, default=0.5)
+l2p.add_argument("--_batchwise_selection" , default=True,  action= argparse.BooleanOptionalAction)
+l2p.add_argument("--_diversed_selection"  , default=True,  action= argparse.BooleanOptionalAction)
+l2p.add_argument("--_unsim_penalty"       , default=True,  action= argparse.BooleanOptionalAction)
+l2p.add_argument("--_scale_prompts"       , default=True,  action= argparse.BooleanOptionalAction)
+l2p.add_argument("--_scale_simmilarity"   , default=True,  action= argparse.BooleanOptionalAction)
+l2p.add_argument("--_update_per_iter"     , default=False, action= argparse.BooleanOptionalAction)
 
 # CertL2P Parser
 certl2p = argparse.ArgumentParser(parents=(l2p,), add_help=False)
-certl2p.add_argument("--selection-layer", type=int, default = [3,6,9], nargs='+')
+certl2p.add_argument("--selection-layer", type=int,   default = [3,6,9], nargs='+')
 certl2p.add_argument("--reserve-rate",    type=float, default = 0.7)
 
-# GradModL2P Parser
-gradmodl2p = argparse.ArgumentParser(parents=(l2p,), add_help=False)
-gradmodl2p.add_argument("--gamma",        type=float, default = 0.7)
+# EL2P Parser
+prel2p = argparse.ArgumentParser(parents=(l2p,), add_help=False)
+prel2p.add_argument("--selection-layer",  type=int,   default = [3,6,9], nargs='+')
+prel2p.add_argument("--reserve-rate",     type=float, default = 0.7)
 
-# PenaL2P Parser
-penal2p = argparse.ArgumentParser(parents=(l2p,), add_help=False)
-penal2p.add_argument("--xi",        type=float, default = 0.1)
-
-
-# PenaL2P Parser
-deuniforml2p = argparse.ArgumentParser(parents=(l2p,), add_help=False)
-deuniforml2p.add_argument("--xi",        type=float, default = 0.1)
-
-# PenaL2P Parser
-gl2p = argparse.ArgumentParser(parents=(l2p,), add_help=False)
-gl2p.add_argument("--_sub_from_prompts", default=False, action= argparse.BooleanOptionalAction)
-gl2p.add_argument("--_Hadamard_Mul",     default=False, action= argparse.BooleanOptionalAction)
-
-# CertL2P Parser
+# EViT Parser
 evit = argparse.ArgumentParser()
 evit.add_argument("--backbone-name",      type=str)
 evit.add_argument("--selection-layer",    type=int, default = [3,6,9], nargs='+')
 evit.add_argument("--reserve-rate",       type=float, default = 0.7)
 
-# CertL2P Parser
+# CertViT Parser
 certvit = argparse.ArgumentParser()
 certvit.add_argument("--backbone-name",   type=str)
 certvit.add_argument("--selection-layer", type=int, default = [3,6,9], nargs='+')

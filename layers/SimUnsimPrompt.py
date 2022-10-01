@@ -3,7 +3,7 @@ import torch.nn as nn
 import torch.nn.functional as F
 
 
-class Prompt(nn.Module):
+class SimUnsimPrompt(nn.Module):
     def __init__(self,
                  pool_size            : int,
                  selection_size       : int,
@@ -11,7 +11,6 @@ class Prompt(nn.Module):
                  dimention            : int,
                  _diversed_selection  : bool = True,
                  _batchwise_selection : bool = True,
-                 _get_unsimmilarity   : bool = False,
                  **kwargs) -> None:
         super().__init__()
 
@@ -21,7 +20,6 @@ class Prompt(nn.Module):
         self.dimention      = dimention
         self._diversed_selection  = _diversed_selection
         self._batchwise_selection = _batchwise_selection
-        self._get_unsimmilarity   = _get_unsimmilarity
 
         self.key     = nn.Parameter(torch.randn(pool_size, dimention, requires_grad= True))
         self.prompts = nn.Parameter(torch.randn(pool_size, prompt_len, dimention, requires_grad= True))
@@ -32,8 +30,7 @@ class Prompt(nn.Module):
         self.register_buffer('frequency', torch.ones (pool_size))
         self.register_buffer('counter',   torch.zeros(pool_size))
         self.register_buffer('topk', torch.zeros(1))
-        if self._get_unsimmilarity:
-            self.register_buffer('nonk', torch.zeros(1))
+        self.register_buffer('nonk', torch.zeros(1))
     
     def forward(self, query : torch.Tensor, **kwargs) -> torch.Tensor:
 
@@ -57,20 +54,18 @@ class Prompt(nn.Module):
         if self.training:
             self.counter += torch.bincount(topk.contiguous().view(-1), minlength = self.pool_size)
 
+        nonk = torch.ones((B, self.pool_size), device=self.prompts.device, dtype=torch.long)
+        nonk = nonk.scatter(1, topk, torch.zeros_like(nonk))
+        nonk = nonk.nonzero(as_tuple=True)[1].reshape(topk.size())
+
         self.topk = topk
+        self.nonk = nonk
+
         selection   = self.prompts.repeat(B, 1, 1, 1).gather(1, topk.unsqueeze(-1).unsqueeze(-1).expand(-1, -1, self.prompt_len, self.dimention))
         simmilarity   = match.gather(1, topk)
+        unsimmilarity = match.gather(1, nonk)
 
-        if self._get_unsimmilarity:
-            nonk = torch.ones((B, self.pool_size), device=self.prompts.device, dtype=torch.long)
-            nonk = nonk.scatter(1, topk, torch.zeros_like(nonk))
-            nonk = nonk.nonzero(as_tuple=True)[1].reshape(topk.size())
-            self.nonk = nonk
-            unsimmilarity = match.gather(1, nonk)
-            
-            return simmilarity, unsimmilarity, selection
-        else :
-            return simmilarity, selection
+        return simmilarity, unsimmilarity, selection
     
     def update(self):
         self.frequency += self.counter
