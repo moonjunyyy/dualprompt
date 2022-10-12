@@ -10,7 +10,7 @@ class CILSampler(torch.utils.data.Sampler):
     or works like as common sampler in a non-distributed setting.
     Heavily based on RASampler by Facebook.
     """
-    def __init__(self, dataset, num_tasks = 1, num_replicas=None, rank=None, shuffle=True, num_repeats: int = 1, seed: int = 0):
+    def __init__(self, dataset, num_tasks = 1, num_replicas=None, rank=None, shuffle=True, shuffle_class=True, num_repeats: int = 1, seed: int = 0):
 
         if num_replicas is not None:
             if not dist.is_available():
@@ -38,7 +38,10 @@ class CILSampler(torch.utils.data.Sampler):
         self.g.manual_seed(self.seed)
 
         stale = len(self.dataset.classes) - len(self.dataset.classes) % self.num_tasks
-        self.taskids = torch.randperm(len(self.dataset.classes), generator = self.g)
+        if shuffle_class:
+            self.taskids = torch.randperm(len(self.dataset.classes), generator = self.g)
+        else:
+            self.taskids = torch.arange(len(self.dataset.classes))
         self.taskids = self.taskids[:stale].reshape(self.num_tasks, -1)
         self.build()
         

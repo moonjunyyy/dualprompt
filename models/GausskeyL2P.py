@@ -8,7 +8,7 @@ from layers.prompt import Prompt
 
 T = TypeVar('T', bound = 'nn.Module')
 
-class ContrastiveL2P(nn.Module):
+class GausskeyL2P(nn.Module):
     def __init__(self,
                  pool_size      : int   = 10,
                  selection_size : int   = 5,
@@ -56,13 +56,46 @@ class ContrastiveL2P(nn.Module):
             _batchwise_selection = _batchwise_selection,
             _get_unsimmilarity   = True)
 
-        self.register_buffer('simmilarity',   torch.zeros(1))
-        self.register_buffer('unsimmilarity', torch.zeros(1))
-        self.register_buffer('mask',  torch.zeros(class_num))
-        self.register_buffer('const',         torch.zeros(1))
-
+        _tmp = torch.rand((pool_size, self.backbone.num_features, self.backbone.num_features)) * 2
+        self.register_buffer('variance',      (_tmp + _tmp.transpose(-1,-2)))
+        self.register_buffer('inv_variance',  torch.linalg.inv(self.variance))
+        self.register_buffer('mask',          torch.zeros(class_num))
         self.prompt.key.requires_grad = False
+
+    def gaussian(self, input : torch.Tensor):
+        B, D = input.shape
+        mean = self.prompt.key.detach() # P,D
+        coff = (torch.tensor([2 * torch.pi], device=mean.device).pow(self.backbone.num_features / 2) * self.variance.norm(dim = (1,2)).sqrt()).reciprocal()
+        return ((input.unsqueeze(1) - mean).unsqueeze(-2) @ self.inv_variance @ (input.unsqueeze(1) - mean).unsqueeze(-1) / -2).squeeze().exp() / coff
+        # B, P, D, 1 @ P, D, D @ B, P, D, 1= B, P, 1, 1
+    
+    def update_keys(self, input : torch.Tensor, idx : torch.Tensor):
+
+        B, D = input.shape
+        mean = self.prompt.key.detach() # P, D
+        P, D = mean.shape
+        mask = torch.scatter(torch.zeros(B, P, device=mean.device), -1, idx[:,:3], torch.ones(B, P, device=mean.device)) # top3 selection
+        # B, P
+        counts = torch.bincount(idx[:,:3].contiguous().view(-1), minlength=P)
+        meanL1 = (mask.unsqueeze(-1) * input.unsqueeze(1)).transpose(0,1).sum(1)
+        # B, D
+        meanL2 = (mask.unsqueeze(-1).unsqueeze(-1) * (input.unsqueeze(-1) @ input.unsqueeze(1)).unsqueeze(1)).transpose(0,1).sum(1)
+
+        # var  = (self.variance + (mean.unsqueeze(-1) @ mean.unsqueeze(1))) * (self.prompt.frequency.log() + 1).unsqueeze(-1).unsqueeze(-1) + meanL2
+        # mean = mean * (self.prompt.frequency.log() + 1).unsqueeze(-1) + meanL1
+        # self.prompt.key = nn.Parameter(mean / (self.prompt.frequency.log() + 2).unsqueeze(-1), requires_grad=False)
+        # self.variance = (var / (self.prompt.frequency.log() + 2).unsqueeze(-1).unsqueeze(-1)) - self.prompt.key.unsqueeze(-1) @ self.prompt.key.unsqueeze(-2)
+        # self.inv_variance = torch.linalg.inv(self.variance)
+        # self.prompt.frequency += counts
+
+        var  = (self.variance + (mean.unsqueeze(-1) @ mean.unsqueeze(1))) * self.prompt.frequency.unsqueeze(-1).unsqueeze(-1) + meanL2
+        mean = mean * self.prompt.frequency.unsqueeze(-1) + meanL1
+        self.prompt.frequency += counts
+        self.prompt.key = nn.Parameter(mean / self.prompt.frequency.unsqueeze(-1), requires_grad=False)
+        self.variance = (var / self.prompt.frequency.unsqueeze(-1).unsqueeze(-1)) - self.prompt.key.unsqueeze(-1) @ self.prompt.key.unsqueeze(-2)
+        self.inv_variance = torch.linalg.inv(self.variance)
         
+
     def forward(self, inputs : torch.Tensor, **kwargs) -> torch.Tensor:
         x = self.backbone.patch_embed(inputs)
         
@@ -74,39 +107,22 @@ class ContrastiveL2P(nn.Module):
         q = self.backbone.blocks(x)
         q = self.backbone.norm(q)[:, 0].clone()
 
-        s, us, p, up = self.prompt(q)
+        prob = self.gaussian(q)
+        prob = prob * F.normalize(self.prompt.frequency.max() - self.prompt.frequency, dim=-1) #Diversed Selection
+        _ ,topk = prob.topk(self.selection_size, dim=-1, largest=False, sorted=True)
+        p = self.prompt.prompts.repeat(B, 1, 1, 1).gather(1, topk.unsqueeze(-1).unsqueeze(-1).expand(B, -1, self.prompt_len, self.backbone.num_features).clone())
+        if self.training : 
+            self.update_keys(q, topk)
 
         p  =  p.contiguous().view(B, self.selection_size * self.prompt_len, D)
         p  =  p + self.backbone.pos_embed[:,0].expand(self.selection_size * self.prompt_len, -1)
-        up = up.contiguous().view(B, self.selection_size * self.prompt_len, D)
-        up = up + self.backbone.pos_embed[:,0].expand(self.selection_size * self.prompt_len, -1)
 
         x = self.backbone.pos_drop(t + self.backbone.pos_embed)
         sx = torch.cat((x[:,0].unsqueeze(1),  p, x[:,1:]), dim=1)
-        # ux = torch.cat((x[:,0].unsqueeze(1), up, x[:,1:]), dim=1)
 
         sx = self.backbone.blocks(sx)
         sx = self.backbone.norm(sx)
         sx = sx[:, 1:self.selection_size * self.prompt_len + 1].clone()
-
-        # ux = self.backbone.blocks(ux)
-        # ux = self.backbone.norm(ux)
-        # ux = ux[:, 1:self.selection_size * self.prompt_len + 1].clone()
-
-        # const = torch.cat((sx, ux), dim=1)
-        # const = const @ const.transpose(-1,-2)
-        # const = ((const - const.max())/ self.tau).exp() 
-        # const = const[:, :self.selection_size, :self.selection_size].sum(-1).sum(-1) / const.sum(-1).sum(-1)
-        # const = -(const + 1e-6).log().sum()
-        # self.const = const
-
-        # sim = torch.cat((1-s, 1-us), dim=1)
-
-        cossim      = (1 - s).unsqueeze(-1)
-        sinsim      = (1 - cossim * cossim).sqrt()
-        self.const  = (cossim @ cossim.transpose(-1,-2) - sinsim @ sinsim.transpose(-1,-2)).sum()
-        self.simmilarity   = s.sum() #-( ((1-s)/self.tau).exp().sum(-1) / (((1-s)/self.tau).exp().sum(-1) + ((1-us)/self.tau).exp().sum(-1)) + 1e-6).log().sum() #s.sum() + 
-        self.unsimmilarity = (1-us).sum()
 
         sx = sx.mean(dim=1)
         x = self.backbone.head(sx)
@@ -120,7 +136,7 @@ class ContrastiveL2P(nn.Module):
     
     def loss_fn(self, output, target):
         B, C = output.size()
-        return F.cross_entropy(output, target) + self.lambd * self.simmilarity + self.xi * self.unsimmilarity + self.zetta * self.const 
+        return F.cross_entropy(output, target)
 
     def _convert_train_task(self, task : torch.Tensor, **kwargs):
         self.mask += -torch.inf

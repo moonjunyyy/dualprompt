@@ -16,6 +16,7 @@ from torchvision.datasets import ImageFolder
 from tsne_torch import TorchTSNE as TSNE
 
 from utils._subset import _Subset
+from utils.dataset5 import Dataset5
 from utils.sampler import CILSampler, CIL_Negative_Sampler
 
 ########################################################################################################################
@@ -84,6 +85,7 @@ class Imgtrainer():
         # Transform needs to be diversed and be selected by user
         transform = transforms.Compose([transforms.Resize((224, 224)),
                                         transforms.ToTensor ()])
+        self.random_class = True
         if self.dataset == ImageFolder:
             self.dataset = ImageFolder(self.dataset_path, transform)
             idx = torch.randperm(len(self.dataset))
@@ -95,6 +97,9 @@ class Imgtrainer():
             self.dataset_train   = self.dataset(self.dataset_path, download=True, train=True,  transform=transform)
             self.dataset_val     = self.dataset(self.dataset_path, download=True, train=False, transform=transform)
 
+        if self.dataset == Dataset5:
+            self.random_class=False
+            
     def run(self):
         if self.ngpus_per_nodes > 1: 
             processes = []
@@ -368,8 +373,8 @@ class Imgtrainer():
         _r = dist.get_rank() if self.distributed else None # means that it is not distributed
         _w = dist.get_world_size() if self.distributed else None # means that it is not distributed
         
-        sampler_train = CILSampler(self.dataset_train, self.num_tasks, _w, _r, shuffle=True, seed=self.seed)
-        sampler_val   = CILSampler(self.dataset_val  , self.num_tasks, _w, _r, shuffle=False, seed=self.seed)
+        sampler_train = CILSampler(self.dataset_train, self.num_tasks, _w, _r, shuffle=True, shuffle_class=self.random_class, seed=self.seed)
+        sampler_val   = CILSampler(self.dataset_val  , self.num_tasks, _w, _r, shuffle=False, shuffle_class=self.random_class, seed=self.seed)
         self.batch_size = int(self.batch_size // self.world_size)
         
         print("Building model...")
@@ -418,8 +423,8 @@ class Imgtrainer():
         _r = dist.get_rank() if self.distributed else None # means that it is not distributed
         _w = dist.get_world_size() if self.distributed else None # means that it is not distributed
         
-        sampler_train = CILSampler(self.dataset_train, self.num_tasks, _w, _r, shuffle=True, seed=self.seed)
-        sampler_val   = CILSampler(self.dataset_val  , self.num_tasks, _w, _r, shuffle=False, seed=self.seed)
+        sampler_train = CILSampler(self.dataset_train, self.num_tasks, _w, _r, shuffle=True, shuffle_class=self.random_class, seed=self.seed)
+        sampler_val   = CILSampler(self.dataset_val  , self.num_tasks, _w, _r, shuffle=False, shuffle_class=self.random_class, seed=self.seed)
         self.batch_size = int(self.batch_size // self.world_size)
         
         print("Building model...")
@@ -483,14 +488,17 @@ class Imgtrainer():
         N = 500 # Too much vectors make OOM Problem
         for n, f in enumerate(ViT_Features):
             vec = torch.concat((vec, f[:N]), dim = 0)
+        P, D = model_without_ddp.prompt.key.shape
+        vec = torch.concat((vec, model_without_ddp.prompt.key), dim = 0)
         vec = TSNE(initial_dims=D).fit_transform(torch.nn.functional.normalize(vec))
         pd.DataFrame(vec).to_csv(f"{self.save_path}ViT_Features.csv")
         for n in range(len(ViT_Features)):
             plt.scatter(vec[N * n : N * (n + 1),0], vec[N * n : N * (n + 1),1], s=1)
+        plt.scatter(vec[-model_without_ddp.prompt.pool_size:, 0], vec[-model_without_ddp.prompt.pool_size:, 1], s=15, marker='+', color='black')
         plt.axis()
         plt.savefig(f"{self.save_path}ViT_Features.png")
         plt.clf()
-        
+
         P, L, D = model_without_ddp.prompt.prompts.shape
         vec = TSNE(initial_dims=D).fit_transform(model_without_ddp.prompt.prompts.reshape(-1, D) / D)
         pd.DataFrame(vec).to_csv(f"{self.save_path}prompts.csv")
@@ -501,68 +509,12 @@ class Imgtrainer():
         plt.clf()
         return
 
-    def CIL_Train_contrastive(self):
-        _r = dist.get_rank() if self.distributed else None # means that it is not distributed
-        _w = dist.get_world_size() if self.distributed else None # means that it is not distributed
-        
-        sampler_train = CILSampler(self.dataset_train, self.num_tasks, _w, _r, shuffle=True, seed=self.seed)
-        sampler_val   = CILSampler(self.dataset_val  , self.num_tasks, _w, _r, shuffle=False, seed=self.seed)
-        sampler_positive = CILSampler(self.dataset_train, self.num_tasks, _w, _r, shuffle=True, seed=self.seed + 1)
-        sampler_negative = CIL_Negative_Sampler(self.dataset_train, self.num_tasks, _w, _r, shuffle=True, seed=self.seed)
-        self.batch_size = int(self.batch_size // self.world_size)
-        
-        print("Building model...")
-        model = self.model(**self.model_args)
-        model.to(self.device)
-        model_without_ddp = model
-        if self.distributed:
-            model = torch.nn.parallel.DistributedDataParallel(model)
-            model._set_static_graph()
-            model_without_ddp = model.module
-        criterion = model_without_ddp.loss_fn if self.criterion == 'custom' else self.criterion()
-        optimizer = self.optimizer(model.parameters(), **self.optimizer_args)
-        scheduler = self.scheduler(optimizer, **self.scheduler_args)
-
-        self.load(model_without_ddp, optimizer, scheduler, self.epoch)
-
-        n_params = sum(p.numel() for p in model_without_ddp.parameters())
-        print(f"Total Parameters :\t{n_params}")
-        n_params = sum(p.numel() for p in model_without_ddp.parameters() if p.requires_grad)
-        print(f"Learnable Parameters :\t{n_params}")
-        print("")
-
-        ViT_Features = [torch.empty((0, model_without_ddp.backbone.num_features), device=self.device) for i in range(self.num_tasks)]
-
-        for self.task in range(self.num_tasks):
-            loader_train = self.set_task(self.dataset_train, sampler_train, self.task)
-            loader_positive = self.set_task(self.dataset_train, sampler_positive, self.task)
-            loader_negative = self.set_task(self.dataset_train, sampler_negative, self.task)
-            print("Selection : ",(model_without_ddp._convert_train_task(sampler_train.get_task()).to(torch.int) - 1).tolist())
-            print(f"Training for task {self.task} : {sampler_train.get_task().tolist()}")
-            
-            for self.epoch in range(self.epochs):
-                sampler_train.set_epoch(self.epoch)
-                self.train_contrastive(loader_train, loader_positive, loader_negative, model, criterion, optimizer)
-                print('')
-                scheduler.step()
-
-            for self.test in range(self.task + 1):
-                loader_val = self.set_task(self.dataset_val, sampler_val, self.test) 
-                self.validate(loader_val, model, criterion)
-
-            self.epoch = 0
-            optimizer = self.optimizer(model.parameters(), **self.optimizer_args)
-            print('')
-        print("Selection : ",(model_without_ddp._convert_train_task(sampler_train.get_task())-1).tolist())
-        self.save(model_without_ddp, optimizer, scheduler, self.epoch)
-        return
-
     def Single_Task_Train(self):
         _r = dist.get_rank() if self.distributed else None # means that it is not distributed
         _w = dist.get_world_size() if self.distributed else None # means that it is not distributed
 
-        sampler_train = CILSampler(self.dataset_train, self.num_tasks, _w, _r, shuffle=True, seed=self.seed)
-        sampler_val   = CILSampler(self.dataset_val  , self.num_tasks, _w, _r, shuffle=False, seed=self.seed)
+        sampler_train = CILSampler(self.dataset_train, self.num_tasks, _w, _r, shuffle=True, shuffle_class=self.random_class, seed=self.seed)
+        sampler_val   = CILSampler(self.dataset_val  , self.num_tasks, _w, _r, shuffle=False, shuffle_class=self.random_class, seed=self.seed)
         self.batch_size = int(self.batch_size // self.world_size)
 
         print("Building model...")
@@ -601,40 +553,3 @@ class Imgtrainer():
             self.save(model_without_ddp, optimizer, scheduler, self.epoch)
         print('')
         return
-        
-        batch_time = AverageMeter('Time', ':6.3f', Summary.NONE)
-        losses = AverageMeter('Loss', ':.4e', Summary.NONE)
-        top1 = AverageMeter('Acc@1', ':6.2f', Summary.AVERAGE)
-        top5 = AverageMeter('Acc@5', ':6.2f', Summary.AVERAGE)
-
-        progress = ProgressMeter(
-            len(loader),
-            [batch_time, losses, top1, top5],
-            prefix='Test: ')
-
-        # switch to evaluate mode
-        model.eval()
-        with torch.no_grad():
-            end = time.time()
-            for i, (images, target) in enumerate(loader):
-                with torch.cuda.amp.autocast(enabled=self.use_amp):
-                    images, target = images.to(self.device), target.to(self.device)
-                    # compute output
-                    output = model(images)
-                    loss = criterion(output, target)
-                    # measure accuracy and record loss
-                    acc1, acc5 = accuracy(output, target, topk=(1, 5))
-                    losses.update(loss.item(), images.size(0))
-                    top1.update(acc1[0], images.size(0))
-                    top5.update(acc5[0], images.size(0))
-                    # measure elapsed time
-                    batch_time.update(time.time() - end)
-                    end = time.time()
-        if self.distributed:
-            dist.barrier()
-            top1.all_reduce()
-            top5.all_reduce()
-        progress.display_summary()
-        progress.write_summary(epoch = self.task, save_path = self.save_path, prefix='Test/task{}/'.format(self.test))
-
-        return top1.avg

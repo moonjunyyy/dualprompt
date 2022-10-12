@@ -13,6 +13,9 @@ from models.CertViT import CertViT
 from models.PrEL2P import PrEL2P
 from models.CertL2P import CertL2P
 from models.ContrastiveL2P import ContrastiveL2P
+from models.NotL2P import NotL2P
+from models.GausskeyL2P import GausskeyL2P
+from utils.dataset5 import Dataset5
 
 #Functions to parse arguments
 
@@ -21,6 +24,8 @@ def model_parser(model_name : str, args : list):
         return DualPrompt, vars(dualprompt.parse_known_args(args)[0])
     elif model_name == "l2p":
         return L2P, vars(l2p.parse_known_args(args)[0])
+    elif model_name == "notl2p":
+        return NotL2P, vars(l2p.parse_known_args(args)[0])
     elif model_name == "evit":
         return EViT, vars(evit.parse_known_args(args)[0])
     elif model_name == "certvit":
@@ -31,6 +36,8 @@ def model_parser(model_name : str, args : list):
         return PrEL2P, vars(prel2p.parse_known_args(args)[0])
     elif model_name == "contrastivel2p":
         return ContrastiveL2P, vars(l2p.parse_known_args(args)[0])
+    elif model_name == "gausskeyl2p":
+        return GausskeyL2P, vars(l2p.parse_known_args(args)[0])
     else:
         raise ValueError("unknown model name {}".format(model_name)[0])
 
@@ -85,6 +92,9 @@ def dataset(args, _data : str) -> Dataset:
             args.model_args["class_num"] = 200
             print("Warning : {} needs to be downloaded manually. Please give correct input of /image folder.".format(_data))
             return ImageFolder
+        elif _data == '5-datasets':
+            args.model_args["class_num"] = 50
+            return Dataset5
         else:
             raise ValueError('Dataset {} not supported'.format(_data))
 
@@ -164,6 +174,7 @@ l2p.add_argument("--prompt-len",     type=int,   default=5)
 l2p.add_argument("--lambda",         type=float, default=0.5)
 l2p.add_argument("--xi",             type=float, default=0.1)
 l2p.add_argument("--tau",            type=float, default=0.5)
+l2p.add_argument("--zetta",          type=float, default=0.1)
 l2p.add_argument("--_batchwise_selection" , default=True,  action= argparse.BooleanOptionalAction)
 l2p.add_argument("--_diversed_selection"  , default=True,  action= argparse.BooleanOptionalAction)
 l2p.add_argument("--_unsim_penalty"       , default=True,  action= argparse.BooleanOptionalAction)
