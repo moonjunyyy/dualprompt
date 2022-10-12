@@ -11,5 +11,6 @@ run/
 out/
 execute/
 test.py
+wandb
 *.out
 *.err
