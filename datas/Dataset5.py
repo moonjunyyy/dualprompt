@@ -47,7 +47,7 @@ class Dataset5(Dataset):
         for cls in self.nmnist.targets:
             self.targets.append(cls + 30)
         self.fourth = len(self.targets)
-        for cls in self.svhn.labels:
+        for img, cls in self.svhn:
             self.targets.append(cls + 40)
         self.fifth = len(self.targets)
 
@@ -62,7 +62,7 @@ class Dataset5(Dataset):
         elif target in [i for i in range(30,40)]:
             return self.nmnist.__getitem__(index - self.third )[0].expand(3,-1,-1), self.targets[index]
         else:
-            return self.svhn  .__getitem__(index -self.fourth )[0],                 self.targets[index]
+            return self.svhn  .__getitem__(index - self.fourth)[0],                 self.targets[index]
 
     def __len__(self):
         return len(self.targets)

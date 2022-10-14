@@ -182,7 +182,7 @@ class Imgtrainer():
         print("")
 
         ViT_Features = [torch.empty((0, model_without_ddp.backbone.num_features), device=self.device) for i in range(self.num_tasks)]
-        accuracy_matrix = torch.zeros((self.num_tasks, self.num_tasks), device=self.device)
+        accuracy_matrix = torch.zeros((self.num_tasks, self.num_tasks))
         for self.task in range(self.num_tasks):
             loader_train = self.set_task(self.dataset_train, sampler_train, self.task)
             print("Selection : ",(model_without_ddp._convert_train_task(sampler_train.get_task()).to(torch.int) - 1).tolist())
@@ -215,7 +215,7 @@ class Imgtrainer():
             optimizer = self.optimizer(model.parameters(), **self.optimizer_args)
             print('')
         print("Selection : ",(model_without_ddp._convert_train_task(sampler_train.get_task())-1).tolist())
-        print(f"Accuracy Matrix : {accuracy_matrix.numpy()} \n Average Accuracy : {accuracy_matrix[-1,:].mean().item()}")
+        print(f"Accuracy Matrix :\n{accuracy_matrix.numpy()} \n Average Accuracy : {accuracy_matrix[-1,:].mean().item()}")
         forgetting = accuracy_matrix.max(dim=1)[0] - accuracy_matrix[-1, :]
         print(f"Forgetting : {forgetting.numpy()} \n Average Forgetting : {forgetting.mean().item()}")
         self.save(model_without_ddp, optimizer, scheduler, self.epoch)

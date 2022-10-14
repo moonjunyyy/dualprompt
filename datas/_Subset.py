@@ -4,7 +4,7 @@ import torch
 class _Subset(Dataset):
     def __init__(self, subset : Subset) -> None:
         super().__init__()
-        dl = DataLoader(subset, 1024, shuffle=False, num_workers=4)
+        dl = DataLoader(subset, 2048, shuffle=False, num_workers=4)
         for n, (data, target) in enumerate(dl):
             if n == 0:
                 self.data    = data

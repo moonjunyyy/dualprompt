@@ -64,7 +64,7 @@ def optimizer_parser(optimizer_name : str, args : list):
         "rmsprop"  : (torch.optim.RMSprop, rmsprop),
     }
     try:
-        return optimizers[optimizer_name], vars(optimizers[optimizer_name].parse_args(args))
+        return optimizers[optimizer_name][0], vars(optimizers[optimizer_name][1].parse_known_args(args)[0])
     except KeyError:
         raise ValueError("unknown optimizer name {}".format(optimizer_name))
 
@@ -73,22 +73,22 @@ def scheduler_parser(scheduler_name : str, args : list):
         "step"        : (torch.optim.lr_scheduler.StepLR, step),
         "exponential" : (torch.optim.lr_scheduler.ExponentialLR, exponential),
         "cosine"      : (torch.optim.lr_scheduler.CosineAnnealingLR, cosine),
-        "const"       : (torch.optim.lr_scheduler.LambdaLR, const),
+        "const"       : (torch.optim.lr_scheduler.ConstantLR, const),
     }
     try:
-        return schedulers[scheduler_name], vars(schedulers[scheduler_name].parse_args(args))
+        return schedulers[scheduler_name][0], vars(schedulers[scheduler_name][1].parse_known_args(args)[0])
     except KeyError:
         raise ValueError("unknown scheduler name {}".format(scheduler_name))
 
 def dataset(args, _data : str) -> Dataset:
     data = {
-        "cifar10"      : (CIFAR10,      10),
-        "cifar100"     : (CIFAR100,     100),
-        "mnist"        : (MNIST,        10),
-        "fashionmnist" : (FashionMNIST, 10),
-        "cub200"       : (CUB200,       200),
-        "imagenet"     : (ImageNet,     1000),
-        "dataset5"     : (Dataset5,     5),
+        "CIFAR10"      : (CIFAR10,      10),
+        "CIFAR100"     : (CIFAR100,     100),
+        "MNIST"        : (MNIST,        10),
+        "fashionMNIST" : (FashionMNIST, 10),
+        "CUB200"       : (CUB200,       200),
+        "ImageNet"     : (ImageNet,     1000),
+        "5datasets"    : (Dataset5,     5),
     }
     try:
         args.model_args["class_num"] = data[_data][1]
