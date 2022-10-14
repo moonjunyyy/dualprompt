@@ -216,7 +216,7 @@ class Imgtrainer():
             print('')
         print("Selection : ",(model_without_ddp._convert_train_task(sampler_train.get_task())-1).tolist())
         print(f"Accuracy Matrix :\n{accuracy_matrix.numpy()} \n Average Accuracy : {accuracy_matrix[-1,:].mean().item()}")
-        forgetting = accuracy_matrix.max(dim=1)[0] - accuracy_matrix[-1, :]
+        forgetting = accuracy_matrix.max(dim=0)[0] - accuracy_matrix[-1, :]
         print(f"Forgetting : {forgetting.numpy()} \n Average Forgetting : {forgetting.mean().item()}")
         self.save(model_without_ddp, optimizer, scheduler, self.epoch)
 
