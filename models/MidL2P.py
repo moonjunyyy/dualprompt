@@ -70,7 +70,7 @@ class MidL2P(nn.Module):
 
         for blk in self.backbone.blocks[0:6]:
             x = blk(x)
-        q = x[:, 0].normalize(dim=-1)
+        q = F.normalize(x[:, 0])
 
         if self._unsim_penalty:
             s, us, p, _ = self.prompt(q)

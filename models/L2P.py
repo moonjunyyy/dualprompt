@@ -43,13 +43,13 @@ class L2P(nn.Module):
         self._unsim_penalty       = _unsim_penalty
         self._scale_simmilarity   = _scale_simmilarity
         self._update_per_iter     = _update_per_iter
-        self.class_num = class_num
+        self.class_num            = class_num
 
         self.add_module('backbone', timm.create_model(backbone_name, pretrained=True, num_classes=class_num))
         for param in self.backbone.parameters():
             param.requires_grad = False
         self.backbone.head.weight.requires_grad = True
-        self.backbone.head.bias.requires_grad = True
+        self.backbone.head.bias.requires_grad   = True
 
         self.prompt = Prompt(
             pool_size,
@@ -69,37 +69,37 @@ class L2P(nn.Module):
 
         B, N, D = x.size()
         cls_token = self.backbone.cls_token.expand(B, -1, -1)
-        t = torch.cat((cls_token, x), dim=1)
-        x = self.backbone.pos_drop(t + self.backbone.pos_embed)
+        token_appended = torch.cat((cls_token, x), dim=1)
+        x = self.backbone.pos_drop(token_appended + self.backbone.pos_embed)
 
-        q = self.backbone.blocks(x)
-        q = self.backbone.norm(q)[:, 0].clone()
+        query = self.backbone.blocks(x)
+        query = self.backbone.norm(query)[:, 0].clone()
 
         if self._unsim_penalty:
-            s, us, p, _ = self.prompt(q)
+            simmilarity, unsimmilarity, prompts, _ = self.prompt(query)
         else:
-            s, p = self.prompt(q)
+            simmilarity, prompts = self.prompt(query)
 
         if self._scale_simmilarity:
             freq = F.normalize(self.prompt.frequency.reciprocal(), p=1, dim=-1)
-            self.simmilarity       =  (s * freq.repeat(B, 1).gather(1, self.prompt.topk)).sum()
+            self.simmilarity       =  (simmilarity * freq.repeat(B, 1).gather(1, self.prompt.topk)).sum()
             if self._unsim_penalty:
-                self.unsimmilarity = (us * freq.repeat(B, 1).gather(1, self.prompt.nonk)).sum()
+                self.unsimmilarity = (unsimmilarity * freq.repeat(B, 1).gather(1, self.prompt.nonk)).sum()
         else:
-            self.simmilarity       =  s.sum()
+            self.simmilarity       =  simmilarity.sum()
             if self._unsim_penalty:
-                self.unsimmilarity = us.sum()
+                self.unsimmilarity = unsimmilarity.sum()
 
             
         if self._scale_prompts :
-            scale = ((s - 1).detach() * self.tau).exp()
-            p = (p * scale.unsqueeze(-1).unsqueeze(-1).expand(-1, -1, self.prompt_len, D)).contiguous().view(B, self.selection_size * self.prompt_len, D)
+            scale = ((simmilarity - 1).detach() * self.tau).exp()
+            prompts = (prompts * scale.unsqueeze(-1).unsqueeze(-1).expand(-1, -1, self.prompt_len, D)).contiguous().view(B, self.selection_size * self.prompt_len, D)
         else :
-            p = p.contiguous().view(B, self.selection_size * self.prompt_len, D)
-        p = p + self.backbone.pos_embed[:,0].clone().expand(self.selection_size * self.prompt_len, -1)
+            prompts = prompts.contiguous().view(B, self.selection_size * self.prompt_len, D)
+        prompts = prompts + self.backbone.pos_embed[:,0].clone().expand(self.selection_size * self.prompt_len, -1)
 
-        x = self.backbone.pos_drop(t + self.backbone.pos_embed)
-        x = torch.cat((x[:,0].unsqueeze(1), p, x[:,1:]), dim=1)
+        x = self.backbone.pos_drop(token_appended + self.backbone.pos_embed)
+        x = torch.cat((x[:,0].unsqueeze(1), prompts, x[:,1:]), dim=1)
 
         x = self.backbone.blocks(x)
         x = self.backbone.norm(x)

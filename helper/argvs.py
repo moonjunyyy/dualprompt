@@ -18,7 +18,7 @@ from models.GausskeyL2P import GausskeyL2P
 from models.MidL2P import MidL2P
 from data.CUB200 import CUB200
 from data.Dataset5 import Dataset5
-
+from data.TinyImageNet import TinyImageNet
 
 ############################################################################
 #                                                                          #
@@ -90,6 +90,7 @@ def dataset(args, _data : str) -> Dataset:
         "fashionMNIST" : (FashionMNIST, 10),
         "CUB200"       : (CUB200,       200),
         "ImageNet"     : (ImageNet,     1000),
+        "TinyImageNet" : (TinyImageNet, 200),
         "5datasets"    : (Dataset5,     50),
     }
     try:
