@@ -3,7 +3,7 @@ from typing import TypeVar
 import torch
 import torch.nn as nn
 import torch.nn.functional as F
-from layers.prompt import Prompt
+from layers.Prompt import Prompt
 from models.CertViT import CertViT
 
 class CertL2P(CertViT):

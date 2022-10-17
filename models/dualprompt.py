@@ -2,7 +2,7 @@ from turtle import forward
 import torch
 import torch.nn as nn
 import torch.nn.functional as F
-from layers.prompt import Prompt
+from layers.Prompt import Prompt
 from models.L2P import L2P
 
 class DualPrompt(L2P):

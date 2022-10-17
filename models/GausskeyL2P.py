@@ -4,7 +4,7 @@ import timm
 import torch
 import torch.nn as nn
 import torch.nn.functional as F
-from layers.prompt import Prompt
+from layers.Prompt import Prompt
 
 T = TypeVar('T', bound = 'nn.Module')
 
@@ -19,6 +19,7 @@ class GausskeyL2P(nn.Module):
                  tau            : float = 0.5,
                  xi             : float = 0.1,
                  zetta          : float = 0.1,
+                 query_mem_size : int   = 10,
                  _batchwise_selection  : bool = True,
                  _diversed_selection   : bool = True,
                  _update_per_iter      : bool = False,
@@ -31,15 +32,17 @@ class GausskeyL2P(nn.Module):
         if pool_size < selection_size:
             raise ValueError('pool_size must be larger than selection_size')
 
+        self.pool_size      = pool_size
         self.prompt_len     = prompt_len
         self.selection_size = selection_size
+        self.query_mem_size = query_mem_size
         self.lambd = lambd
         self.tau   = tau
         self.xi    = xi
         self.zetta = zetta
         self._batchwise_selection = _batchwise_selection
-        self._update_per_iter = _update_per_iter
-        self.class_num = class_num
+        self._update_per_iter     = _update_per_iter
+        self.class_num      = class_num
 
         self.add_module('backbone', timm.create_model(backbone_name, pretrained=True, num_classes=class_num))
         for param in self.backbone.parameters():
@@ -60,7 +63,22 @@ class GausskeyL2P(nn.Module):
         self.register_buffer('variance',      (_tmp + _tmp.transpose(-1,-2)))
         self.register_buffer('inv_variance',  torch.linalg.inv(self.variance))
         self.register_buffer('mask',          torch.zeros(class_num))
+        
+        for num in range(pool_size):
+            self.register_buffer(f'query_memory_{num}',  torch.ones((query_mem_size, self.backbone.num_features)) * torch.inf)
         self.prompt.key.requires_grad = False
+    
+    def update_query_memory(self, query : torch.Tensor, idx : torch.Tensor):
+        B, C = query.shape
+        
+        for batch in range(idx.size(0)):
+            query_memory = getattr(self, f'query_memory_{idx[batch]}')
+            query_memory = torch.cat((query_memory, query[batch].unsqueeze(0)), dim = 0)
+
+        for num in range(self.pool_size):
+            query_memory = getattr(self, f'query_memory_{num}')
+            query_memory = query_memory[-self.query_mem_size:]
+            setattr(self, f'query_memory_{num}', query_memory)
 
     def gaussian(self, input : torch.Tensor):
         B, D = input.shape
@@ -111,8 +129,8 @@ class GausskeyL2P(nn.Module):
         prob = prob * F.normalize(self.prompt.frequency.max() - self.prompt.frequency, dim=-1) #Diversed Selection
         _ ,topk = prob.topk(self.selection_size, dim=-1, largest=False, sorted=True)
         p = self.prompt.prompts.repeat(B, 1, 1, 1).gather(1, topk.unsqueeze(-1).unsqueeze(-1).expand(B, -1, self.prompt_len, self.backbone.num_features).clone())
-        if self.training : 
-            self.update_keys(q, topk)
+        # if self.training : 
+        #     self.update_keys(q, topk)
 
         p  =  p.contiguous().view(B, self.selection_size * self.prompt_len, D)
         p  =  p + self.backbone.pos_embed[:,0].expand(self.selection_size * self.prompt_len, -1)
