@@ -15,8 +15,9 @@ from models.CertL2P import CertL2P
 from models.ContrastiveL2P import ContrastiveL2P
 from models.NotL2P import NotL2P
 from models.GausskeyL2P import GausskeyL2P
-from datas.CUB200 import CUB200
-from datas.Dataset5 import Dataset5
+from models.MidL2P import MidL2P
+from data.CUB200 import CUB200
+from data.Dataset5 import Dataset5
 
 
 ############################################################################
@@ -36,6 +37,7 @@ def model_parser(model_name : str, args : list):
         "prel2p"         : (PrEL2P, prel2p),
         "contrastivel2p" : (ContrastiveL2P, l2p),
         "gausskeyl2p"    : (GausskeyL2P, l2p),
+        "midl2p"         : (MidL2P, l2p),
     }
     try:
         return models[model_name][0], vars(models[model_name][1].parse_known_args(args)[0])
@@ -88,7 +90,7 @@ def dataset(args, _data : str) -> Dataset:
         "fashionMNIST" : (FashionMNIST, 10),
         "CUB200"       : (CUB200,       200),
         "ImageNet"     : (ImageNet,     1000),
-        "5datasets"    : (Dataset5,     5),
+        "5datasets"    : (Dataset5,     50),
     }
     try:
         args.model_args["class_num"] = data[_data][1]

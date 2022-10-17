@@ -2,10 +2,8 @@ from typing import Callable, Optional
 
 import torchvision.transforms as transforms
 from torch.utils.data import Dataset
-from torchvision.datasets import (CIFAR10, MNIST, SVHN, FashionMNIST,
-                                  ImageFolder)
-
-from datas.NotMNIST import NotMNIST
+from torchvision.datasets import CIFAR10, MNIST, SVHN, FashionMNIST
+from data.NotMNIST import NotMNIST
 
 
 class Dataset5(Dataset):
@@ -18,13 +16,12 @@ class Dataset5(Dataset):
         download: bool = False,
     ) -> None:
 
-        tf = transforms.Compose([transforms.Resize((224, 224))])
         super().__init__()
         self.cifar  = CIFAR10     (root, train, transform, target_transform, download)
         self.mnist  = MNIST       (root, train, transform, target_transform, download)
         self.fmnist = FashionMNIST(root, train, transform, target_transform, download)
         self.nmnist = NotMNIST    (root, train, transform, target_transform, download)
-        self.svhn   = SVHN        (root, "train" if train else "test", transform, target_transform, download)
+        self.svhn   = SVHN(root, "train" if train else "test", transform, target_transform, download)
 
         self.classes = [str(i) for i in range(50)]
         self.targets = []
@@ -36,33 +33,34 @@ class Dataset5(Dataset):
         self.fifth  = 0
 
         for cls in self.cifar.targets:
-            self.targets.append(cls)
+            self.targets.append(int(cls))
         self.first = len(self.targets)
         for cls in self.mnist.targets:
-            self.targets.append(cls + 10)
+            self.targets.append(int(cls + 10))
         self.second = len(self.targets)
         for cls in self.fmnist.targets:
-            self.targets.append(cls + 20)
+            self.targets.append(int(cls + 20))
         self.third = len(self.targets)
-        for cls in self.nmnist.targets:
-            self.targets.append(cls + 30)
+        for cls in self.svhn.labels:
+            self.targets.append(int(cls + 30))
         self.fourth = len(self.targets)
-        for img, cls in self.svhn:
-            self.targets.append(cls + 40)
+        for cls in self.nmnist.targets:
+            self.targets.append(int(cls + 40))
         self.fifth = len(self.targets)
 
     def __getitem__(self, index):
         target = self.targets[index]
-        if target in [i for i in range(0,10)]:
-            return self.cifar .__getitem__(index)[0],                               self.targets[index]
-        elif target in [i for i in range(10,20)]:
-            return self.mnist .__getitem__(index - self.first )[0].expand(3,-1,-1), self.targets[index]
-        elif target in [i for i in range(20,30)]:
-            return self.fmnist.__getitem__(index - self.second)[0].expand(3,-1,-1), self.targets[index]
-        elif target in [i for i in range(30,40)]:
-            return self.nmnist.__getitem__(index - self.third )[0].expand(3,-1,-1), self.targets[index]
+        if target >= 0 and target < 10:
+            item = self.cifar .__getitem__(index)[0]
+        elif target >= 10 and target < 20:
+            item = self.mnist .__getitem__(index - self.first )[0].expand(3,-1,-1)
+        elif target >= 20 and target < 30:
+            item = self.fmnist.__getitem__(index - self.second)[0].expand(3,-1,-1)
+        elif target >= 30 and target < 40:
+            item = self.svhn  .__getitem__(index - self.third )[0]
         else:
-            return self.svhn  .__getitem__(index - self.fourth)[0],                 self.targets[index]
+            item = self.nmnist.__getitem__(index - self.fourth)[0].expand(3,-1,-1)
+        return item, target
 
     def __len__(self):
         return len(self.targets)

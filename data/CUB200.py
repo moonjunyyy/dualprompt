@@ -1,10 +1,12 @@
-import torch
-from torch.utils.data import Dataset
-from torchvision.datasets import ImageFolder, ImageNet
-import torchvision.transforms as transforms
-from torch.utils.data import random_split
-from datas._Subset import _Subset
 from typing import Callable, Optional
+
+import torch
+from torch.utils.data import Dataset, random_split
+from torchvision.datasets import ImageFolder
+import torchvision.transforms as transforms
+
+from data._DatasetCopy import _DatasetCopy
+
 
 class CUB200(Dataset):
     def __init__(self, 
@@ -19,9 +21,11 @@ class CUB200(Dataset):
         len_train    = int(len(self.dataset) * 0.8)
         len_val      = len(self.dataset) - len_train
         train, test  = random_split(self.dataset, [len_train, len_val], generator=torch.Generator().manual_seed(42))
-        self.dataset = _Subset(train if train else test)
-        self.classes = self.dataset.classes
-        self.targets = self.dataset.targets
+        self.dataset = train if train else test
+        self.classes = self.dataset.dataset.classes
+        self.targets = []
+        for i in self.dataset.indices:
+            self.targets.append(self.dataset.dataset.targets[i])
         pass
     
     def __getitem__(self, index):

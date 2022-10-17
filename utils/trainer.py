@@ -1,4 +1,3 @@
-import builtins
 import os
 import random
 import time
@@ -10,13 +9,12 @@ import torch.backends.cudnn as cudnn
 import torch.distributed as dist
 import torch.multiprocessing as mp
 import torchvision.transforms as transforms
-from datas._Subset import _Subset
-from datas.Dataset5 import Dataset5
-from datas.sampler import CILSampler
+from data.Dataset5 import Dataset5
 from helper.metric import AverageMeter, ProgressMeter, Summary, accuracy
-from torch.utils.data import DataLoader, Subset, random_split
-from torchvision.datasets import ImageFolder
 from tsne_torch import TorchTSNE as TSNE
+from torch.utils.data import DataLoader
+
+from utils.sampler import CILSampler
 
 ########################################################################################################################
 # This is trainer with a DistributedDataParallel                                                                       #
@@ -86,24 +84,25 @@ class Imgtrainer():
         self.distributed     = self.world_size > 1
         
         #TODO : Transform needs to be diversed and be selected by user
-        train_transform = transforms.Compose([transforms.Resize((224, 224)), transforms.ToTensor ()])
-        var_transform   = transforms.Compose([transforms.Resize((224, 224)), transforms.ToTensor ()])
+        self.train_transform = transforms.Compose([transforms.Resize((224, 224)), transforms.ToTensor ()])
+        self.var_transform   = transforms.Compose([transforms.Resize((224, 224)), transforms.ToTensor ()])
 
         self.random_class = not self.dataset == Dataset5
-        self.dataset_train   = self.dataset(self.dataset_path, download=True, train=True,  transform=train_transform)
-        self.dataset_val     = self.dataset(self.dataset_path, download=True, train=False, transform=var_transform)
+        self.dataset_train   = self.dataset(self.dataset_path, download=True, train=True,  transform=self.train_transform)
+        self.dataset_val     = self.dataset(self.dataset_path, download=True, train=False, transform=self.var_transform)
 
     def run(self):
         if self.ngpus_per_nodes > 1: 
-            processes = []
-            for n in range(self.ngpus_per_nodes):
-                print(f"start process {n}...")
-                p = mp.Process(target=self.main_worker, args=(n,))
-                p.start()
-                processes.append(p)
-            for p in processes:
-                p.join()
-            return
+            mp.spawn(self.main_worker, (), self.ngpus_per_nodes, True)
+            # processes = []
+            # for n in range(self.ngpus_per_nodes):
+            #     print(f"start process {n}...")
+            #     p = mp.Process(target=self.main_worker, args=(n,))
+            #     p.start()
+            #     processes.append(p)
+            # for p in processes:
+            #     p.join()
+            # return
         else:
             self.main_worker(self.local_rank)
 
@@ -118,7 +117,6 @@ class Imgtrainer():
             else :
                 self.rank = gpu
                 print(f"| Init Process group 0 : {self.local_rank}")
-
             if 'MASTER_ADDR' not in os.environ.keys():
                 os.environ['MASTER_ADDR'] = '127.0.0.1'
                 os.environ['MASTER_PORT'] = '12701'
@@ -156,7 +154,7 @@ class Imgtrainer():
     def CIL_Train(self):
         _r = dist.get_rank() if self.distributed else None       # means that it is not distributed
         _w = dist.get_world_size() if self.distributed else None # means that it is not distributed
-        
+    
         sampler_train = CILSampler(self.dataset_train, self.num_tasks, _w, _r, shuffle=True,  shuffle_class=self.random_class, seed=self.seed)
         sampler_val   = CILSampler(self.dataset_val  , self.num_tasks, _w, _r, shuffle=False, shuffle_class=self.random_class, seed=self.seed)
         self.batch_size = int(self.batch_size // self.world_size)
@@ -188,19 +186,20 @@ class Imgtrainer():
             print("Selection : ",(model_without_ddp._convert_train_task(sampler_train.get_task()).to(torch.int) - 1).tolist())
             print(f"Training for task {self.task} : {sampler_train.get_task().tolist()}")
 
-            for i, (data, target) in enumerate(loader_train):
-                data = data.to(self.device)
-                x = model_without_ddp.backbone.patch_embed(data)
+            # for i, (data, target) in enumerate(loader_train):
+            #     data = data.to(self.device)
+            #     x = model_without_ddp.backbone.patch_embed(data)
 
-                B, N, D = x.size()
-                cls_token = model_without_ddp.backbone.cls_token.expand(B, -1, -1)
-                t = torch.cat((cls_token, x), dim=1)
-                x = model_without_ddp.backbone.pos_drop(t + model_without_ddp.backbone.pos_embed)
+            #     B, N, D = x.size()
+            #     cls_token = model_without_ddp.backbone.cls_token.expand(B, -1, -1)
+            #     t = torch.cat((cls_token, x), dim=1)
+            #     x = model_without_ddp.backbone.pos_drop(t + model_without_ddp.backbone.pos_embed)
 
-                q = model_without_ddp.backbone.blocks(x)
-                q = model_without_ddp.backbone.norm(q)[:, 0].clone()
-                ViT_Features[self.task] = torch.concat((ViT_Features[self.task], q))
+            #     q = model_without_ddp.backbone.blocks(x)
+            #     q = model_without_ddp.backbone.norm(q)[:, 0].clone()
+            #     ViT_Features[self.task] = torch.concat((ViT_Features[self.task], q))
 
+            # loader_train = self.set_task(self.dataset_train, sampler_train, self.task)
             for self.epoch in range(self.epochs):
                 sampler_train.set_epoch(self.epoch)
                 self.train(loader_train, model, criterion, optimizer)
@@ -220,31 +219,31 @@ class Imgtrainer():
         print(f"Forgetting : {forgetting.numpy()} \n Average Forgetting : {forgetting.mean().item()}")
         self.save(model_without_ddp, optimizer, scheduler, self.epoch)
 
-        if self.is_main_process():
-            N, D = ViT_Features[0].shape
-            vec = torch.empty((0, D), device=ViT_Features[0].device)
-            N = int(5000/self.num_tasks)     # Too much vectors make OOM Problem
-            for n, f in enumerate(ViT_Features):
-                vec = torch.concat((vec, f[:N]), dim = 0)
-            P, D = model_without_ddp.prompt.key.shape
-            vec = torch.concat((vec, model_without_ddp.prompt.key), dim = 0)
-            vec = TSNE(initial_dims=D).fit_transform((vec/vec.max()).nan_to_num(0))
-            pd.DataFrame(vec).to_csv(f"{self.save_path}ViT_Features.csv")
-            for n in range(len(ViT_Features)):
-                plt.scatter(vec[N * n : N * (n + 1),0], vec[N * n : N * (n + 1),1], s=1)
-            plt.scatter(vec[-model_without_ddp.prompt.pool_size:, 0], vec[-model_without_ddp.prompt.pool_size:, 1], s=15, marker='+', color='black')
-            plt.axis()
-            plt.savefig(f"{self.save_path}ViT_Features.png")
-            plt.clf()
+        # if self.is_main_process():
+        #     N, D = ViT_Features[0].shape
+        #     vec = torch.empty((0, D), device=ViT_Features[0].device)
+        #     N = int(5000/self.num_tasks)     # Too much vectors make OOM Problem
+        #     for n, f in enumerate(ViT_Features):
+        #         vec = torch.concat((vec, f[:N]), dim = 0)
+        #     P, D = model_without_ddp.prompt.key.shape
+        #     vec = torch.concat((vec, model_without_ddp.prompt.key), dim = 0)
+        #     vec = TSNE(initial_dims=D).fit_transform((vec/vec.max()).nan_to_num(0))
+        #     pd.DataFrame(vec).to_csv(f"{self.save_path}ViT_Features.csv")
+        #     for n in range(len(ViT_Features)):
+        #         plt.scatter(vec[N * n : N * (n + 1),0], vec[N * n : N * (n + 1),1], s=1)
+        #     plt.scatter(vec[-model_without_ddp.prompt.pool_size:, 0], vec[-model_without_ddp.prompt.pool_size:, 1], s=15, marker='+', color='black')
+        #     plt.axis()
+        #     plt.savefig(f"{self.save_path}ViT_Features.png")
+        #     plt.clf()
 
-            P, L, D = model_without_ddp.prompt.prompts.shape
-            vec = TSNE(initial_dims=D).fit_transform(model_without_ddp.prompt.prompts.reshape(-1, D) / D)
-            pd.DataFrame(vec).to_csv(f"{self.save_path}prompts.csv")
-            for p in range(P):
-                plt.scatter(vec[p*L : (p+1)*L, 0], vec[p*L : (p+1)*L, 1], s=1)
-            plt.axis()
-            plt.savefig(f"{self.save_path}prompts.png")
-            plt.clf()
+        #     P, L, D = model_without_ddp.prompt.prompts.shape
+        #     vec = TSNE(initial_dims=D).fit_transform(model_without_ddp.prompt.prompts.reshape(-1, D) / D)
+        #     pd.DataFrame(vec).to_csv(f"{self.save_path}prompts.csv")
+        #     for p in range(P):
+        #         plt.scatter(vec[p*L : (p+1)*L, 0], vec[p*L : (p+1)*L, 1], s=1)
+        #     plt.axis()
+        #     plt.savefig(f"{self.save_path}prompts.png")
+        #     plt.clf()
         return
 
     def Single_Task_Train(self):

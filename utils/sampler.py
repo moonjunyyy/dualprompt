@@ -42,7 +42,7 @@ class CILSampler(torch.utils.data.Sampler):
             self.taskids = torch.randperm(len(self.dataset.classes), generator = self.g)
         else:
             self.taskids = torch.arange(len(self.dataset.classes))
-        self.taskids = self.taskids[:stale].reshape(self.num_tasks, -1)[torch.randperm(self.num_tasks, generator = self.g)]
+        self.taskids = self.taskids[:stale].reshape(self.num_tasks, -1)
         self.build()
         
     def build(self):
