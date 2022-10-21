@@ -1,3 +1,4 @@
+from asyncio.log import logger
 import os
 import sys
 import time
@@ -9,10 +10,13 @@ from utils.trainer import Imgtrainer
 import timm
 from timm.models.registry import register_model
 from timm.models.vision_transformer import _cfg, _create_vision_transformer, default_cfgs
+import wandb
+from helper.sweep import sweep_config
 
-os.environ["TORCH_DISTRIBUTED_DEBUG"]="DETAIL"
-os.environ['CUDA_LAUNCH_BLOCKING'] = "1"
+# os.environ["TORCH_DISTRIBUTED_DEBUG"]="DETAIL"
+# os.environ['CUDA_LAUNCH_BLOCKING'] = "1"
 
+# Register the backbone model to timm
 @register_model
 def vit_base_patch16_224_l2p(pretrained=False, **kwargs):
     """ ViT-Base model (ViT-B/32) from original paper (https://arxiv.org/abs/2010.11929).
@@ -28,6 +32,7 @@ default_cfgs['vit_base_patch16_224_l2p'] = _cfg(
         url='https://storage.googleapis.com/vit_models/imagenet21k/ViT-B_16.npz',
         num_classes=21843)
 
+# Print the dictionary in a nice way
 def dict_print(d : dict, indent = 0) -> None:
     for k, v in d.items():
         print('\t' * indent + str(k), end = ' : ')
@@ -37,13 +42,28 @@ def dict_print(d : dict, indent = 0) -> None:
         else:
             print(v)
 
+def run():
+    config = wandb.config
+    trainer = Imgtrainer(**config)
+    trainer.run()
+
+# MAIN FUNCTION
 def main(kwargs):
     dict_print(kwargs)
-    mp.set_start_method('spawn')
-    trainer = Imgtrainer(**kwargs)
-    trainer.run()
-    time.sleep(60)
+    wandb.init(project=kwargs['project'], name=kwargs['name'], config=kwargs, config_exclude_keys=['sweep', 'project', 'name'])
+    print(wandb.config)
+    if kwargs['sweep']:
+        logger.info("Starting sweep")
+        logger.info("Sweep config must be defined in helper/sweep.py.")
+        sweep_id = wandb.sweep(sweep_config)
+        wandb.agent(sweep_id, function=run)
+    else:
+        run()
+
 
 if __name__ == "__main__":
-    main(vars(parse_args(sys.argv)))
+    mp.set_start_method('spawn')
+    kwargs = vars(parse_args(sys.argv[1:]))
+    main(kwargs)
     print("Done")
+    time.sleep(10)

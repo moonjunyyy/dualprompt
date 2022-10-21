@@ -2,116 +2,22 @@ import argparse
 
 import torch
 import torch.nn as nn
-from torch.utils.data import Dataset
-from torchvision.datasets import CIFAR10, CIFAR100, MNIST, FashionMNIST, ImageNet
-from torchvision.datasets import ImageFolder
-
-from models.dualprompt import DualPrompt
-from models.L2P import L2P
-from models.EViT import EViT
-from models.CertViT import CertViT
-from models.PrEL2P import PrEL2P
-from models.CertL2P import CertL2P
-from models.ContrastiveL2P import ContrastiveL2P
-from models.NotL2P import NotL2P
-from models.GausskeyL2P import GausskeyL2P
-from models.MidL2P import MidL2P
 from data.CUB200 import CUB200
 from data.Dataset5 import Dataset5
 from data.TinyImageNet import TinyImageNet
-
-############################################################################
-#                                                                          #
-#  Parsing functions                                                       #
-#                                                                          #
-############################################################################ 
-
-def model_parser(model_name : str, args : list):
-    models = {
-        "dualprompt"     : (DualPrompt, dualprompt),
-        "l2p"            : (L2P, l2p),
-        "notl2p"         : (NotL2P, notl2p),
-        "evit"           : (EViT, evit),
-        "certvit"        : (CertViT, certvit),
-        "certl2p"        : (CertL2P, certl2p),
-        "prel2p"         : (PrEL2P, prel2p),
-        "contrastivel2p" : (ContrastiveL2P, l2p),
-        "gausskeyl2p"    : (GausskeyL2P, gausskeyl2p),
-        "midl2p"         : (MidL2P, l2p),
-    }
-    try:
-        return models[model_name][0], vars(models[model_name][1].parse_known_args(args)[0])
-    except KeyError:
-        raise ValueError("unknown model name {}".format(model_name))
-
-def criterion_parser(criterion_name : str):
-    criterions = {
-        "crossentropy" : nn.CrossEntropyLoss,
-        "bce"          : nn.BCEWithLogitsLoss,
-        "bce_logits"   : nn.BCELoss,
-        "mse"          : nn.MSELoss,
-        "l1"           : nn.L1Loss,
-        "custom"       : "custom",
-    }
-    try:
-        return criterions[criterion_name]
-    except KeyError:
-        raise ValueError("unknown criterion name {}".format(criterion_name))
-
-def optimizer_parser(optimizer_name : str, args : list):
-    optimizers = {
-        "sgd"      : (torch.optim.SGD, sgd),
-        "adam"     : (torch.optim.Adam, adam),
-        "adadelta" : (torch.optim.AdamW, adamw),
-        "rmsprop"  : (torch.optim.RMSprop, rmsprop),
-    }
-    try:
-        return optimizers[optimizer_name][0], vars(optimizers[optimizer_name][1].parse_known_args(args)[0])
-    except KeyError:
-        raise ValueError("unknown optimizer name {}".format(optimizer_name))
-
-def scheduler_parser(scheduler_name : str, args : list):
-    schedulers = {
-        "step"        : (torch.optim.lr_scheduler.StepLR, step),
-        "exponential" : (torch.optim.lr_scheduler.ExponentialLR, exponential),
-        "cosine"      : (torch.optim.lr_scheduler.CosineAnnealingLR, cosine),
-        "const"       : (torch.optim.lr_scheduler.ConstantLR, const),
-    }
-    try:
-        return schedulers[scheduler_name][0], vars(schedulers[scheduler_name][1].parse_known_args(args)[0])
-    except KeyError:
-        raise ValueError("unknown scheduler name {}".format(scheduler_name))
-
-def dataset(args, _data : str) -> Dataset:
-    data = {
-        "CIFAR10"      : (CIFAR10,      10),
-        "CIFAR100"     : (CIFAR100,     100),
-        "MNIST"        : (MNIST,        10),
-        "fashionMNIST" : (FashionMNIST, 10),
-        "CUB200"       : (CUB200,       200),
-        "ImageNet"     : (ImageNet,     1000),
-        "TinyImageNet" : (TinyImageNet, 200),
-        "5datasets"    : (Dataset5,     50),
-    }
-    try:
-        args.model_args["class_num"] = data[_data][1]
-        return data[_data][0]
-    except KeyError:
-        raise ValueError("unknown dataset name {}".format(_data))
-
-def parse_args(args : list):
-    parse    = parser.parse_known_args(args)
-    parse, _ = parse
-
-    parse.model, parse.model_args = model_parser(parse.model, args)
-    if parse.criterion == "custom":
-        print("Using custom criterion, please specify the loss_fn in the model")
-    parse.criterion = criterion_parser(parse.criterion)
-    parse.optimizer, parse.optimizer_args = optimizer_parser(parse.optimizer, args)
-    parse.scheduler, parse.scheduler_args = scheduler_parser(parse.scheduler, args)
-    parse.dataset = dataset(parse, parse.dataset)
-
-    return parse
+from models.CertL2P import CertL2P
+from models.CertViT import CertViT
+from models.ContrastiveL2P import ContrastiveL2P
+from models.dualprompt import DualPrompt
+from models.EViT import EViT
+from models.GausskeyL2P import GausskeyL2P
+from models.L2P import L2P
+from models.MidL2P import MidL2P
+from models.NotL2P import NotL2P
+from models.PrEL2P import PrEL2P
+from torch.utils.data import Dataset
+from torchvision.datasets import (CIFAR10, CIFAR100, MNIST, FashionMNIST,
+                                  ImageNet)
 
 ############################################################################
 #                                                                          #
@@ -119,6 +25,10 @@ def parse_args(args : list):
 #                                                                          #
 ############################################################################  
 parser = argparse.ArgumentParser(description = 'Train and Evaluate Model')
+
+parser.add_argument("--sweep",          action = "store_true", help = "Run sweep")
+parser.add_argument("--project"       , type=str, default="default", help="Project name for wandb")
+parser.add_argument("--name"          , type=str, default="default", help="Name of the run")
 
 parser.add_argument("--model"         , type=str, help="model name to train or evaluate")
 parser.add_argument("--criterion"     , type=str, help="loss function to use for training",           default="adam")
@@ -138,7 +48,7 @@ parser.add_argument("--dataset"       , type=str, help="number of print for a ep
 parser.add_argument("--dataset-path"  , type=str, default="/home/datasets/", help="path of dataset")
 parser.add_argument("--save-path"     , type=str, default="saved/model/", help="path to save model")
 
-parser.add_argument("--eval"    , default=False, action= argparse.BooleanOptionalAction, help="perform reproduction not training if True")
+parser.add_argument("--eval"    , default=False, action="store_true", help="perform reproduction not training if True")
 parser.add_argument("--seed"    , type=int, default=None, help="manually set random seed")
 parser.add_argument("--device"  , type=str, default='cuda', help="device to use for training/testing")
 parser.add_argument("--pin-mem" , default=False, action= argparse.BooleanOptionalAction, help="use pin memory for data loader")
@@ -164,7 +74,7 @@ l2p.add_argument("--backbone-name",  type=str)
 l2p.add_argument("--pool-size",      type=int,   default=10)
 l2p.add_argument("--selection-size", type=int,   default=5)
 l2p.add_argument("--prompt-len",     type=int,   default=5)
-l2p.add_argument("--lambda",         type=float, default=0.5)
+l2p.add_argument("--lambd",          type=float, default=0.5)
 l2p.add_argument("--xi",             type=float, default=0.1)
 l2p.add_argument("--tau",            type=float, default=0.5)
 l2p.add_argument("--zetta",          type=float, default=0.1)
@@ -282,3 +192,126 @@ step = argparse.ArgumentParser()
 step.add_argument("--step-size"      , type=int, default=1)
 step.add_argument("--gamma"          , type=float, default=0.1)
 step.add_argument("--last-epoch"     , type=int, default=0)
+
+############################################################################
+#                                                                          #
+#  Parsing functions                                                       #
+#                                                                          #
+############################################################################ 
+models = {
+    "dualprompt"     : (DualPrompt, dualprompt),
+    "l2p"            : (L2P, l2p),
+    "notl2p"         : (NotL2P, notl2p),
+    "evit"           : (EViT, evit),
+    "certvit"        : (CertViT, certvit),
+    "certl2p"        : (CertL2P, certl2p),
+    "prel2p"         : (PrEL2P, prel2p),
+    "contrastivel2p" : (ContrastiveL2P, l2p),
+    "gausskeyl2p"    : (GausskeyL2P, gausskeyl2p),
+    "midl2p"         : (MidL2P, l2p),
+}
+criterions = {
+    "crossentropy" : nn.CrossEntropyLoss,
+    "bce"          : nn.BCEWithLogitsLoss,
+    "bce_logits"   : nn.BCELoss,
+    "mse"          : nn.MSELoss,
+    "l1"           : nn.L1Loss,
+    "custom"       : "custom",
+}
+optimizers = {
+    "sgd"      : (torch.optim.SGD, sgd),
+    "adam"     : (torch.optim.Adam, adam),
+    "adadelta" : (torch.optim.AdamW, adamw),
+    "rmsprop"  : (torch.optim.RMSprop, rmsprop),
+}
+schedulers = {
+    "step"        : (torch.optim.lr_scheduler.StepLR, step),
+    "exponential" : (torch.optim.lr_scheduler.ExponentialLR, exponential),
+    "cosine"      : (torch.optim.lr_scheduler.CosineAnnealingLR, cosine),
+    "const"       : (torch.optim.lr_scheduler.ConstantLR, const),
+}
+data = {
+    "CIFAR10"      : (CIFAR10,      10),
+    "CIFAR100"     : (CIFAR100,     100),
+    "MNIST"        : (MNIST,        10),
+    "fashionMNIST" : (FashionMNIST, 10),
+    "CUB200"       : (CUB200,       200),
+    "ImageNet"     : (ImageNet,     1000),
+    "TinyImageNet" : (TinyImageNet, 200),
+    "5datasets"    : (Dataset5,     50),
+}
+
+def model_parser(model_name : str, args : list):
+    try:
+        return model_name, vars(models[model_name][1].parse_known_args(args)[0])
+    except KeyError:
+        raise ValueError("unknown model name {}".format(model_name))
+
+def criterion_parser(criterion_name : str):
+    try:
+        return criterion_name
+    except KeyError:
+        raise ValueError("unknown criterion name {}".format(criterion_name))
+
+def optimizer_parser(optimizer_name : str, args : list):
+    try:
+        return optimizer_name, vars(optimizers[optimizer_name][1].parse_known_args(args)[0])
+    except KeyError:
+        raise ValueError("unknown optimizer name {}".format(optimizer_name))
+
+def scheduler_parser(scheduler_name : str, args : list):
+    try:
+        return scheduler_name, vars(schedulers[scheduler_name][1].parse_known_args(args)[0])
+    except KeyError:
+        raise ValueError("unknown scheduler name {}".format(scheduler_name))
+
+def dataset(args, _data : str) -> Dataset:
+    try:
+        args.model_args["class_num"] = data[_data][1]
+        return _data
+    except KeyError:
+        raise ValueError("unknown dataset name {}".format(_data))
+
+def get_model(model_name : str):
+    try:
+        return models[model_name][0]
+    except KeyError:
+        raise ValueError("unknown model name {}".format(model_name))
+
+def get_criterion(criterion_name : str):
+    try:
+        return criterions[criterion_name]
+    except KeyError:
+        raise ValueError("unknown criterion name {}".format(criterion_name))
+
+def get_optimizer(optimizer_name : str):
+    try:
+        return optimizers[optimizer_name][0]
+    except KeyError:
+        raise ValueError("unknown optimizer name {}".format(optimizer_name))
+
+def get_scheduler(scheduler_name : str):
+    try:
+        return schedulers[scheduler_name][0]
+    except KeyError:
+        raise ValueError("unknown scheduler name {}".format(scheduler_name))
+
+def get_dataset(dataset_name : str):
+    try:
+        return data[dataset_name][0]
+    except KeyError:
+        raise ValueError("unknown dataset name {}".format(dataset_name))
+
+def parse_args(args : list):
+    parse    = parser.parse_known_args(args)
+    parse, _ = parse
+
+    parse.model, parse.model_args = model_parser(parse.model, args)
+    if parse.criterion == "custom":
+        print("Using custom criterion, please specify the loss_fn in the model")
+    parse.criterion = criterion_parser(parse.criterion)
+    parse.optimizer, parse.optimizer_args = optimizer_parser(parse.optimizer, args)
+    parse.scheduler, parse.scheduler_args = scheduler_parser(parse.scheduler, args)
+    parse.dataset = dataset(parse, parse.dataset)
+
+    return parse

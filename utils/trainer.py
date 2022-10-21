@@ -2,6 +2,7 @@ import os
 import random
 import time
 
+import wandb
 import matplotlib.pyplot as plt
 import pandas as pd
 import torch
@@ -15,6 +16,7 @@ from tsne_torch import TorchTSNE as TSNE
 from torch.utils.data import DataLoader
 
 from utils.sampler import CILSampler
+from helper.argvs import get_model, get_criterion, get_optimizer, get_scheduler, get_dataset
 
 ########################################################################################################################
 # This is trainer with a DistributedDataParallel                                                                       #
@@ -38,12 +40,12 @@ class Imgtrainer():
                  seed, device, pin_mem, use_amp, use_tf, debug,
                  world_size, dist_url, dist_backend, rank, local_rank,
                  *args, **kwargs) -> None:
-        
+
         # Model and Training Settings
-        self.model, self.model_args = model, model_args
-        self.criterion = criterion
-        self.optimizer, self.optimizer_args = optimizer, optimizer_args
-        self.scheduler, self.scheduler_args = scheduler, scheduler_args
+        self.model, self.model_args = get_model(model), model_args
+        self.criterion = get_criterion(criterion)
+        self.optimizer, self.optimizer_args = get_optimizer(optimizer), optimizer_args
+        self.scheduler, self.scheduler_args = get_scheduler(scheduler), scheduler_args
 
         self.epoch  = 0
         self.epochs = epochs
@@ -55,7 +57,7 @@ class Imgtrainer():
         # Dataset Settings
         self.num_tasks    = num_tasks
         self.num_workers  = num_workers
-        self.dataset      = dataset
+        self.dataset      = get_dataset(dataset)
         self.dataset_path = dataset_path
         self.pin_mem      = pin_mem
 
@@ -91,18 +93,11 @@ class Imgtrainer():
         self.dataset_train   = self.dataset(self.dataset_path, download=True, train=True,  transform=self.train_transform)
         self.dataset_val     = self.dataset(self.dataset_path, download=True, train=False, transform=self.var_transform)
 
+        print(self.__dict__)
+
     def run(self):
         if self.ngpus_per_nodes > 1: 
             mp.spawn(self.main_worker, (), self.ngpus_per_nodes, True)
-            # processes = []
-            # for n in range(self.ngpus_per_nodes):
-            #     print(f"start process {n}...")
-            #     p = mp.Process(target=self.main_worker, args=(n,))
-            #     p.start()
-            #     processes.append(p)
-            # for p in processes:
-            #     p.join()
-            # return
         else:
             self.main_worker(self.local_rank)
 
@@ -151,73 +146,77 @@ class Imgtrainer():
             else:
                 self.Single_Task_Eval()
 
-    def CIL_Train(self):
+    def setup_dataset_for_distributed(self):
         _r = dist.get_rank() if self.distributed else None       # means that it is not distributed
         _w = dist.get_world_size() if self.distributed else None # means that it is not distributed
     
-        sampler_train = CILSampler(self.dataset_train, self.num_tasks, _w, _r, shuffle=True,  shuffle_class=self.random_class, seed=self.seed)
-        sampler_val   = CILSampler(self.dataset_val  , self.num_tasks, _w, _r, shuffle=False, shuffle_class=self.random_class, seed=self.seed)
+        self.sampler_train = CILSampler(self.dataset_train, self.num_tasks, _w, _r, shuffle=True,  shuffle_class=self.random_class, seed=self.seed)
+        self.sampler_val   = CILSampler(self.dataset_val  , self.num_tasks, _w, _r, shuffle=False, shuffle_class=self.random_class, seed=self.seed)
         self.batch_size = int(self.batch_size // self.world_size)
 
         print("Building model...")
-        model = self.model(**self.model_args)
-        model.to(self.device)
-        model_without_ddp = model
+        self.model = self.model(**self.model_args)
+        self.model.to(self.device)
+        self.model_without_ddp = self.model
         if self.distributed:
-            model = torch.nn.parallel.DistributedDataParallel(model)
-            model._set_static_graph()
-            model_without_ddp = model.module
-        criterion = model_without_ddp.loss_fn if self.criterion == 'custom' else self.criterion()
-        optimizer = self.optimizer(model.parameters(), **self.optimizer_args)
-        scheduler = self.scheduler(optimizer, **self.scheduler_args)
+            self.model = torch.nn.parallel.DistributedDataParallel(self.model)
+            self.model._set_static_graph()
+            self.model_without_ddp = self.model.module
+        self.criterion = self.model_without_ddp.loss_fn if self.criterion == 'custom' else self.criterion()
+        self.optimizer = self.optimizer(self.model.parameters(), **self.optimizer_args)
+        self.scheduler = self.scheduler(self.optimizer, **self.scheduler_args)
 
-        self.load(model_without_ddp, optimizer, scheduler, self.epoch)
+        self.load(self.model_without_ddp, self.optimizer, self.scheduler, self.epoch)
 
-        n_params = sum(p.numel() for p in model_without_ddp.parameters())
+        n_params = sum(p.numel() for p in self.model_without_ddp.parameters())
         print(f"Total Parameters :\t{n_params}")
-        n_params = sum(p.numel() for p in model_without_ddp.parameters() if p.requires_grad)
+        n_params = sum(p.numel() for p in self.model_without_ddp.parameters() if p.requires_grad)
         print(f"Learnable Parameters :\t{n_params}")
         print("")
 
-        ViT_Features = [torch.empty((0, model_without_ddp.backbone.num_features), device=self.device) for i in range(self.num_tasks)]
+    def CIL_Train(self):
+
+        self.setup_dataset_for_distributed()
+
+        ViT_Features = [torch.empty((0, self.model_without_ddp.backbone.num_features), device=self.device) for i in range(self.num_tasks)]
         accuracy_matrix = torch.zeros((self.num_tasks, self.num_tasks))
         for self.task in range(self.num_tasks):
-            loader_train = self.set_task(self.dataset_train, sampler_train, self.task)
-            print("Selection : ",(model_without_ddp._convert_train_task(sampler_train.get_task()).to(torch.int) - 1).tolist())
-            print(f"Training for task {self.task} : {sampler_train.get_task().tolist()}")
+            loader_train = self.set_task(self.dataset_train, self.sampler_train, self.task)
+            print("Selection : ",(self.model_without_ddp._convert_train_task(self.sampler_train.get_task()).to(torch.int) - 1).tolist())
+            print(f"Training for task {self.task} : {self.sampler_train.get_task().tolist()}")
 
             for i, (data, target) in enumerate(loader_train):
                 data = data.to(self.device)
-                x = model_without_ddp.backbone.patch_embed(data)
+                x = self.model_without_ddp.backbone.patch_embed(data)
 
                 B, N, D = x.size()
-                cls_token = model_without_ddp.backbone.cls_token.expand(B, -1, -1)
+                cls_token = self.model_without_ddp.backbone.cls_token.expand(B, -1, -1)
                 t = torch.cat((cls_token, x), dim=1)
-                x = model_without_ddp.backbone.pos_drop(t + model_without_ddp.backbone.pos_embed)
+                x = self.model_without_ddp.backbone.pos_drop(t + self.model_without_ddp.backbone.pos_embed)
 
-                q = model_without_ddp.backbone.blocks(x)
-                q = model_without_ddp.backbone.norm(q)[:, 0].clone()
+                q = self.model_without_ddp.backbone.blocks(x)
+                q = self.model_without_ddp.backbone.norm(q)[:, 0].clone()
                 ViT_Features[self.task] = torch.concat((ViT_Features[self.task], q))
 
-            loader_train = self.set_task(self.dataset_train, sampler_train, self.task)
+            loader_train = self.set_task(self.dataset_train, self.sampler_train, self.task)
             for self.epoch in range(self.epochs):
-                sampler_train.set_epoch(self.epoch)
-                self.train(loader_train, model, criterion, optimizer)
+                self.sampler_train.set_epoch(self.epoch)
+                self.train(loader_train, self.model, self.criterion, self.optimizer)
                 print('')
-                scheduler.step()
+                self.scheduler.step()
 
             for self.test in range(self.task + 1):
-                loader_val = self.set_task(self.dataset_val, sampler_val, self.test) 
-                accuracy_matrix[self.task, self.test] = self.validate(loader_val, model, criterion)
+                loader_val = self.set_task(self.dataset_val, self.sampler_val, self.test) 
+                accuracy_matrix[self.task, self.test] = self.validate(loader_val, self.model, self.criterion)
 
             self.epoch = 0
-            optimizer = self.optimizer(model.parameters(), **self.optimizer_args)
+            optimizer = self.optimizer(self.model.parameters(), **self.optimizer_args)
             print('')
-        print("Selection : ",(model_without_ddp._convert_train_task(sampler_train.get_task())-1).tolist())
+        print("Selection : ",(self.model_without_ddp._convert_train_task(self.sampler_train.get_task())-1).tolist())
         print(f"Accuracy Matrix :\n{accuracy_matrix.numpy()} \n Average Accuracy : {accuracy_matrix[-1,:].mean().item()}")
         forgetting = accuracy_matrix.max(dim=0)[0] - accuracy_matrix[-1, :]
         print(f"Forgetting : {forgetting.numpy()} \n Average Forgetting : {forgetting.mean().item()}")
-        self.save(model_without_ddp, optimizer, scheduler, self.epoch)
+        self.save(self.model_without_ddp, optimizer, self.scheduler, self.epoch)
 
         if self.is_main_process():
             N, D = ViT_Features[0].shape
@@ -225,19 +224,19 @@ class Imgtrainer():
             N = int(5000/self.num_tasks)     # Too much vectors make OOM Problem
             for n, f in enumerate(ViT_Features):
                 vec = torch.concat((vec, f[:N]), dim = 0)
-            P, D = model_without_ddp.prompt.key.shape
-            vec = torch.concat((vec, model_without_ddp.prompt.key), dim = 0)
+            P, D = self.model_without_ddp.prompt.key.shape
+            vec = torch.concat((vec, self.model_without_ddp.prompt.key), dim = 0)
             vec = TSNE(initial_dims=D).fit_transform((vec/vec.max()).nan_to_num(0))
             pd.DataFrame(vec).to_csv(f"{self.save_path}ViT_Features.csv")
             for n in range(len(ViT_Features)):
                 plt.scatter(vec[N * n : N * (n + 1),0], vec[N * n : N * (n + 1),1], s=1)
-            plt.scatter(vec[-model_without_ddp.prompt.pool_size:, 0], vec[-model_without_ddp.prompt.pool_size:, 1], s=15, marker='+', color='black')
+            plt.scatter(vec[-self.model_without_ddp.prompt.pool_size:, 0], vec[-self.model_without_ddp.prompt.pool_size:, 1], s=15, marker='+', color='black')
             plt.axis()
             plt.savefig(f"{self.save_path}ViT_Features.png")
             plt.clf()
 
-            P, L, D = model_without_ddp.prompt.prompts.shape
-            vec = TSNE(initial_dims=D).fit_transform(model_without_ddp.prompt.prompts.reshape(-1, D) / D)
+            P, L, D = self.model_without_ddp.prompt.prompts.shape
+            vec = TSNE(initial_dims=D).fit_transform(self.model_without_ddp.prompt.prompts.reshape(-1, D) / D)
             pd.DataFrame(vec).to_csv(f"{self.save_path}prompts.csv")
             for p in range(P):
                 plt.scatter(vec[p*L : (p+1)*L, 0], vec[p*L : (p+1)*L, 1], s=1)
@@ -247,47 +246,23 @@ class Imgtrainer():
         return
 
     def Single_Task_Train(self):
-        _r = dist.get_rank() if self.distributed else None       # means that it is not distributed
-        _w = dist.get_world_size() if self.distributed else None # means that it is not distributed
+        self.setup_dataset_for_distributed()
 
-        sampler_train = CILSampler(self.dataset_train, self.num_tasks, _w, _r, shuffle=True,  shuffle_class=self.random_class, seed=self.seed)
-        sampler_val   = CILSampler(self.dataset_val  , self.num_tasks, _w, _r, shuffle=False, shuffle_class=self.random_class, seed=self.seed)
-        self.batch_size = int(self.batch_size // self.world_size)
-
-        print("Building model...")
-        model = self.model(**self.model_args)
-        model.to(self.device)
-        model_without_ddp = model
-        if self.distributed:
-            model = torch.nn.parallel.DistributedDataParallel(model)
-            model._set_static_graph()
-            model_without_ddp = model.module
-        criterion = model_without_ddp.loss_fn if self.criterion == 'custom' else self.criterion()
-        optimizer = self.optimizer(model.parameters(), **self.optimizer_args)
-        scheduler = self.scheduler(optimizer, **self.scheduler_args)
-        self.load(model_without_ddp, optimizer, scheduler, self.epoch)
-
-        n_params = sum(p.numel() for p in model_without_ddp.parameters())
-        print(f"Total Parameters :\t{n_params}")
-        n_params = sum(p.numel() for p in model_without_ddp.parameters() if p.requires_grad)
-        print(f"Learnable Parameters :\t{n_params}")
-        print("")
-
-        loader_train = self.set_task(self.dataset_train, sampler_train, 0)
-        loader_val   = self.set_task(self.dataset_val,   sampler_val,   0) 
+        loader_train = self.set_task(self.dataset_train, self.sampler_train, 0)
+        loader_val   = self.set_task(self.dataset_val,   self.sampler_val,   0) 
         self.task = 0
         self.test = 0
         if not self.training:
-            self.validate(loader_val, model, criterion)
+            self.validate(loader_val, self.model, self.criterion)
             return
 
         for self.epoch in range(self.epochs):
-            sampler_train.set_epoch(self.epoch)
-            self.train(loader_train, model, criterion, optimizer)
+            self.sampler_train.set_epoch(self.epoch)
+            self.train(loader_train, self.model, self.criterion, self.optimizer)
             print('')
-            scheduler.step()
-            self.validate(loader_val, model, criterion)
-            self.save(model_without_ddp, optimizer, scheduler, self.epoch)
+            self.scheduler.step()
+            self.validate(loader_val, self.model, self.criterion)
+            self.save(self.model_without_ddp, self.optimizer, self.scheduler, self.epoch)
         print('')
         return
 
@@ -311,7 +286,7 @@ class Imgtrainer():
             [batch_time, data_time, losses, top1, top5],
             prefix="Epoch: [{}]".format(self.epoch + 1))
         # switch to train mode
-        model.train()
+        self.model.train()
         log_interval = int(len(loader) // self.log_frequency)
         end = time.time()
         for i, (images, target) in enumerate(loader):
@@ -321,8 +296,8 @@ class Imgtrainer():
             
             with torch.cuda.amp.autocast(enabled=self.use_amp):
                 # compute output
-                output = model(images)
-                loss = criterion(output, target)
+                output = self.model(images)
+                loss = self.criterion(output, target)
                 # measure accuracy and record loss
                 acc1, acc5 = accuracy(output, target, topk=(1, 5))
                 losses.update(loss.item(), images.size(0))
@@ -341,6 +316,7 @@ class Imgtrainer():
                 progress.display(i + 1)
         if self.use_tf:
             progress.write_summary(epoch = self.task * self. epochs + self.epoch, save_path = self.save_path, prefix='Train/')
+            wandb.log({'Train/Loss': losses.avg, 'Train/Acc@1': top1.avg, 'Train/Acc@5': top5.avg}, step = self.task * self.epochs + self.epoch)
                 
     def validate(self, loader, model, criterion):
         
@@ -355,15 +331,15 @@ class Imgtrainer():
             prefix='Test: ')
 
         # switch to evaluate mode
-        model.eval()
+        self.model.eval()
         with torch.no_grad():
             end = time.time()
             for i, (images, target) in enumerate(loader):
                 with torch.cuda.amp.autocast(enabled=self.use_amp):
                     images, target = images.to(self.device), target.to(self.device)
                     # compute output
-                    output = model(images)
-                    loss = criterion(output, target)
+                    output = self.model(images)
+                    loss = self.criterion(output, target)
                     # measure accuracy and record loss
                     acc1, acc5 = accuracy(output, target, topk=(1, 5))
                     losses.update(loss.item(), images.size(0))
@@ -379,6 +355,7 @@ class Imgtrainer():
         progress.display_summary()
         if self.use_tf:
             progress.write_summary(epoch = self.task, save_path = self.save_path, prefix='Test/task{}/'.format(self.test))
+            wandb.log({'Test/Loss': losses.avg, 'Test/Acc@1': top1.avg, 'Test/Acc@5': top5.avg}, step = self.task)
         return top1.avg
 
     def save_on_master(self):
@@ -420,7 +397,7 @@ class Imgtrainer():
 
     def save(self, model, optimizer, scheduler, epoch):
             r'''
-            Save the model.
+            Save the self.model.
             '''
             torch.save({
                 'epoch'                : epoch,
@@ -433,7 +410,7 @@ class Imgtrainer():
             
     def load(self, model, optimizer, scheduler, epoch, load_idx = -1):
         r'''
-        Load the model.
+        Load the self.model.
         '''
         try:
             for e in range(1, self.epochs + 1 if load_idx == -1 else load_idx):
@@ -441,12 +418,12 @@ class Imgtrainer():
         except:
             pass
         try:
-            model.load_state_dict(load_dict['model_state_dict'])
+            self.model.load_state_dict(load_dict['model_state_dict'])
             optimizer.load_state_dict(load_dict['optimizer_state_dict'])
             scheduler.load_state_dict(load_dict['scheduler_state_dict'])
             epoch = load_dict['epoch']
         except:
             print("Load failed. Start from Scratch.")
             return model, optimizer, scheduler, epoch
-        print("Loaded model from epoch {}".format(self.epoch))
+        print("Loaded self.model from epoch {}".format(self.epoch))
         return model, optimizer, scheduler, epoch
