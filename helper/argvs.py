@@ -30,13 +30,13 @@ def model_parser(model_name : str, args : list):
     models = {
         "dualprompt"     : (DualPrompt, dualprompt),
         "l2p"            : (L2P, l2p),
-        "notl2p"         : (NotL2P, l2p),
+        "notl2p"         : (NotL2P, notl2p),
         "evit"           : (EViT, evit),
         "certvit"        : (CertViT, certvit),
         "certl2p"        : (CertL2P, certl2p),
         "prel2p"         : (PrEL2P, prel2p),
         "contrastivel2p" : (ContrastiveL2P, l2p),
-        "gausskeyl2p"    : (GausskeyL2P, l2p),
+        "gausskeyl2p"    : (GausskeyL2P, gausskeyl2p),
         "midl2p"         : (MidL2P, l2p),
     }
     try:
@@ -174,6 +174,14 @@ l2p.add_argument("--_unsim_penalty"       , default=True,  action= argparse.Bool
 l2p.add_argument("--_scale_prompts"       , default=True,  action= argparse.BooleanOptionalAction)
 l2p.add_argument("--_scale_simmilarity"   , default=True,  action= argparse.BooleanOptionalAction)
 l2p.add_argument("--_update_per_iter"     , default=False, action= argparse.BooleanOptionalAction)
+
+# NotL2P Parser
+notl2p = argparse.ArgumentParser(parents=(l2p,), add_help=False)
+notl2p.add_argument("--shared-prompts", type=int, default=2)
+
+# GausskeyL2P Parser
+gausskeyl2p = argparse.ArgumentParser(parents=(l2p,), add_help=False)
+gausskeyl2p.add_argument("--psudo-sapmle", type=int, default=10)
 
 # DualPrompt Parser
 dualprompt = argparse.ArgumentParser(add_help=False)

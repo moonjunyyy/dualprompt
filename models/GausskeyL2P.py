@@ -1,3 +1,4 @@
+from cmath import isinf
 from typing import TypeVar
 
 import timm
@@ -14,12 +15,11 @@ class GausskeyL2P(nn.Module):
                  selection_size : int   = 5,
                  prompt_len     : int   = 5,
                  class_num      : int   = 100,
+                 psudo_sapmle   : int   = 10,
                  backbone_name  : str   = None,
                  lambd          : float = 0.5,
-                 tau            : float = 0.5,
-                 xi             : float = 0.1,
                  zetta          : float = 0.1,
-                 query_mem_size : int   = 10,
+                 xi             : float = 0.1,
                  _batchwise_selection  : bool = True,
                  _diversed_selection   : bool = True,
                  _update_per_iter      : bool = False,
@@ -35,11 +35,10 @@ class GausskeyL2P(nn.Module):
         self.pool_size      = pool_size
         self.prompt_len     = prompt_len
         self.selection_size = selection_size
-        self.query_mem_size = query_mem_size
+        self.psudo_sapmle   = psudo_sapmle
         self.lambd = lambd
-        self.tau   = tau
-        self.xi    = xi
         self.zetta = zetta
+        self.xi    = xi
         self._batchwise_selection = _batchwise_selection
         self._update_per_iter     = _update_per_iter
         self.class_num      = class_num
@@ -49,24 +48,18 @@ class GausskeyL2P(nn.Module):
             param.requires_grad = False
         self.backbone.head.weight.requires_grad = True
         self.backbone.head.bias.requires_grad = True
-
-        self.prompt = Prompt(
-            pool_size,
-            selection_size,
-            prompt_len,
-            self.backbone.num_features,
-            _diversed_selection  = _diversed_selection,
-            _batchwise_selection = _batchwise_selection,
-            _get_unsimmilarity   = True)
-
-        _tmp = torch.rand((pool_size, self.backbone.num_features, self.backbone.num_features)) * 2
-        self.register_buffer('variance',      (_tmp + _tmp.transpose(-1,-2)))
-        self.register_buffer('inv_variance',  torch.linalg.inv(self.variance))
-        self.register_buffer('mask',          torch.zeros(class_num))
         
-        for num in range(pool_size):
-            self.register_buffer(f'query_memory_{num}',  torch.ones((query_mem_size, self.backbone.num_features)) * torch.inf)
-        self.prompt.key.requires_grad = False
+        self.prompt = nn.Parameter(torch.randn(pool_size, prompt_len, self.backbone.num_features), requires_grad=True)
+        
+        self.mean     = nn.Parameter(torch.rand(self.pool_size, self.backbone.num_features), requires_grad=True)
+        self.variance = nn.Parameter(torch.eye(self.backbone.num_features).repeat(pool_size, 1, 1), requires_grad = True)
+
+        self.register_buffer('prior_mean',     self.mean)
+        self.register_buffer('prior_variance', self.variance)
+
+        self.register_buffer('frequency', torch.ones(self.pool_size))
+        self.register_buffer('sample', torch.zeros((pool_size, class_num)))
+        self.register_buffer('mask',          torch.zeros(class_num))
     
     def update_query_memory(self, query : torch.Tensor, idx : torch.Tensor):
         B, C = query.shape
@@ -115,22 +108,25 @@ class GausskeyL2P(nn.Module):
         
 
     def forward(self, inputs : torch.Tensor, **kwargs) -> torch.Tensor:
+        self.distribution = torch.distributions.MultivariateNormal(self.mean, self.variance)
         x = self.backbone.patch_embed(inputs)
-        
+
         B, N, D = x.size()
         cls_token = self.backbone.cls_token.expand(B, -1, -1)
         t = torch.cat((cls_token, x), dim=1)
         x = self.backbone.pos_drop(t + self.backbone.pos_embed)
 
         q = self.backbone.blocks(x)
+        # B, D
         q = self.backbone.norm(q)[:, 0].clone()
 
-        prob = self.gaussian(q)
-        prob = prob * F.normalize(self.prompt.frequency.max() - self.prompt.frequency, dim=-1) #Diversed Selection
-        _ ,topk = prob.topk(self.selection_size, dim=-1, largest=False, sorted=True)
-        p = self.prompt.prompts.repeat(B, 1, 1, 1).gather(1, topk.unsqueeze(-1).unsqueeze(-1).expand(B, -1, self.prompt_len, self.backbone.num_features).clone())
-        # if self.training : 
-        #     self.update_keys(q, topk)
+        # B, P
+        prob = self.distribution.log_prob(q.unsqueeze(1))
+        topk = prob * F.normalize(self.frequency, p=1, dim=-1) #Diversed Selection
+        _ ,topk = topk.topk(self.selection_size, dim=-1, largest=True, sorted=True)
+        self.frequency += torch.bincount(topk.contiguous().view(-1), minlength = self.pool_size)
+        p = self.prompt.repeat(B, 1, 1, 1).gather(1, topk.unsqueeze(-1).unsqueeze(-1).expand(B, -1, self.prompt_len, self.backbone.num_features).clone())
+        self.prob_loss = -prob.exp().gather(1, topk).sum()
 
         p  =  p.contiguous().view(B, self.selection_size * self.prompt_len, D)
         p  =  p + self.backbone.pos_embed[:,0].expand(self.selection_size * self.prompt_len, -1)
@@ -154,12 +150,24 @@ class GausskeyL2P(nn.Module):
     
     def loss_fn(self, output, target):
         B, C = output.size()
-        return F.cross_entropy(output, target)
+        if torch.isinf(self.prior_mean).any() or torch.isinf(self.prior_variance).any():
+            return F.cross_entropy(output, target) + self.lambd * self.prob_loss
+        else:
+            self.prior_distribution = torch.distributions.MultivariateNormal(self.prior_mean, self.prior_variance)
+            random_samples = self.prior_distribution.sample((self.psudo_sapmle,))
+            # S, D
+            # P, S, D
+            # P, S
+            drag_loss = (self.prior_distribution.log_prob(random_samples).exp() - self.distribution.log_prob(random_samples).exp()).pow(2).sum()
+            return F.cross_entropy(output, target) + self.lambd * self.prob_loss + self.zetta * drag_loss
 
     def _convert_train_task(self, task : torch.Tensor, **kwargs):
+        self.prior_mean = self.mean
+        self.prior_variance = self.variance
+
         self.mask += -torch.inf
         self.mask[task.to(self.mask.device)] = 0
-        return self.prompt.update()
+        return self.frequency
 
     def train(self: T, mode: bool = True, **kwargs) -> T:
         ten = super().train(mode)

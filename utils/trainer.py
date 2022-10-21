@@ -129,7 +129,7 @@ class Imgtrainer():
             pass
 
         if self.seed is not None:
-            seed = self.seed + self.rank
+            seed = self.seed #+ self.rank
             random.seed(seed)
             torch.manual_seed(seed)
             cudnn.deterministic = True
@@ -186,20 +186,20 @@ class Imgtrainer():
             print("Selection : ",(model_without_ddp._convert_train_task(sampler_train.get_task()).to(torch.int) - 1).tolist())
             print(f"Training for task {self.task} : {sampler_train.get_task().tolist()}")
 
-            # for i, (data, target) in enumerate(loader_train):
-            #     data = data.to(self.device)
-            #     x = model_without_ddp.backbone.patch_embed(data)
+            for i, (data, target) in enumerate(loader_train):
+                data = data.to(self.device)
+                x = model_without_ddp.backbone.patch_embed(data)
 
-            #     B, N, D = x.size()
-            #     cls_token = model_without_ddp.backbone.cls_token.expand(B, -1, -1)
-            #     t = torch.cat((cls_token, x), dim=1)
-            #     x = model_without_ddp.backbone.pos_drop(t + model_without_ddp.backbone.pos_embed)
+                B, N, D = x.size()
+                cls_token = model_without_ddp.backbone.cls_token.expand(B, -1, -1)
+                t = torch.cat((cls_token, x), dim=1)
+                x = model_without_ddp.backbone.pos_drop(t + model_without_ddp.backbone.pos_embed)
 
-            #     q = model_without_ddp.backbone.blocks(x)
-            #     q = model_without_ddp.backbone.norm(q)[:, 0].clone()
-            #     ViT_Features[self.task] = torch.concat((ViT_Features[self.task], q))
+                q = model_without_ddp.backbone.blocks(x)
+                q = model_without_ddp.backbone.norm(q)[:, 0].clone()
+                ViT_Features[self.task] = torch.concat((ViT_Features[self.task], q))
 
-            # loader_train = self.set_task(self.dataset_train, sampler_train, self.task)
+            loader_train = self.set_task(self.dataset_train, sampler_train, self.task)
             for self.epoch in range(self.epochs):
                 sampler_train.set_epoch(self.epoch)
                 self.train(loader_train, model, criterion, optimizer)
@@ -219,31 +219,31 @@ class Imgtrainer():
         print(f"Forgetting : {forgetting.numpy()} \n Average Forgetting : {forgetting.mean().item()}")
         self.save(model_without_ddp, optimizer, scheduler, self.epoch)
 
-        # if self.is_main_process():
-        #     N, D = ViT_Features[0].shape
-        #     vec = torch.empty((0, D), device=ViT_Features[0].device)
-        #     N = int(5000/self.num_tasks)     # Too much vectors make OOM Problem
-        #     for n, f in enumerate(ViT_Features):
-        #         vec = torch.concat((vec, f[:N]), dim = 0)
-        #     P, D = model_without_ddp.prompt.key.shape
-        #     vec = torch.concat((vec, model_without_ddp.prompt.key), dim = 0)
-        #     vec = TSNE(initial_dims=D).fit_transform((vec/vec.max()).nan_to_num(0))
-        #     pd.DataFrame(vec).to_csv(f"{self.save_path}ViT_Features.csv")
-        #     for n in range(len(ViT_Features)):
-        #         plt.scatter(vec[N * n : N * (n + 1),0], vec[N * n : N * (n + 1),1], s=1)
-        #     plt.scatter(vec[-model_without_ddp.prompt.pool_size:, 0], vec[-model_without_ddp.prompt.pool_size:, 1], s=15, marker='+', color='black')
-        #     plt.axis()
-        #     plt.savefig(f"{self.save_path}ViT_Features.png")
-        #     plt.clf()
+        if self.is_main_process():
+            N, D = ViT_Features[0].shape
+            vec = torch.empty((0, D), device=ViT_Features[0].device)
+            N = int(5000/self.num_tasks)     # Too much vectors make OOM Problem
+            for n, f in enumerate(ViT_Features):
+                vec = torch.concat((vec, f[:N]), dim = 0)
+            P, D = model_without_ddp.prompt.key.shape
+            vec = torch.concat((vec, model_without_ddp.prompt.key), dim = 0)
+            vec = TSNE(initial_dims=D).fit_transform((vec/vec.max()).nan_to_num(0))
+            pd.DataFrame(vec).to_csv(f"{self.save_path}ViT_Features.csv")
+            for n in range(len(ViT_Features)):
+                plt.scatter(vec[N * n : N * (n + 1),0], vec[N * n : N * (n + 1),1], s=1)
+            plt.scatter(vec[-model_without_ddp.prompt.pool_size:, 0], vec[-model_without_ddp.prompt.pool_size:, 1], s=15, marker='+', color='black')
+            plt.axis()
+            plt.savefig(f"{self.save_path}ViT_Features.png")
+            plt.clf()
 
-        #     P, L, D = model_without_ddp.prompt.prompts.shape
-        #     vec = TSNE(initial_dims=D).fit_transform(model_without_ddp.prompt.prompts.reshape(-1, D) / D)
-        #     pd.DataFrame(vec).to_csv(f"{self.save_path}prompts.csv")
-        #     for p in range(P):
-        #         plt.scatter(vec[p*L : (p+1)*L, 0], vec[p*L : (p+1)*L, 1], s=1)
-        #     plt.axis()
-        #     plt.savefig(f"{self.save_path}prompts.png")
-        #     plt.clf()
+            P, L, D = model_without_ddp.prompt.prompts.shape
+            vec = TSNE(initial_dims=D).fit_transform(model_without_ddp.prompt.prompts.reshape(-1, D) / D)
+            pd.DataFrame(vec).to_csv(f"{self.save_path}prompts.csv")
+            for p in range(P):
+                plt.scatter(vec[p*L : (p+1)*L, 0], vec[p*L : (p+1)*L, 1], s=1)
+            plt.axis()
+            plt.savefig(f"{self.save_path}prompts.png")
+            plt.clf()
         return
 
     def Single_Task_Train(self):

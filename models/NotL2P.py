@@ -71,6 +71,7 @@ class NotL2P(nn.Module):
 
         x = self.backbone.pos_drop(t + self.backbone.pos_embed)
         x = torch.cat((x[:,0].unsqueeze(1), ep, sp, x[:,1:]), dim=1)
+        # x = torch.cat((ep, sp, x[:,1:]), dim=1)
 
         x = self.backbone.blocks(x)
         x = self.backbone.norm(x)
@@ -101,7 +102,7 @@ class NotL2P(nn.Module):
 
         self.mask += -torch.inf
         self.mask[task] = 0
-        
+        print(f'current task is {self.task_id}')
         return torch.zeros(self.num_task)
 
     def train(self: T, mode: bool = True, **kwargs) -> T:
