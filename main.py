@@ -11,7 +11,6 @@ import timm
 from timm.models.registry import register_model
 from timm.models.vision_transformer import _cfg, _create_vision_transformer, default_cfgs
 import wandb
-from helper.sweep import sweep_config
 
 # os.environ["TORCH_DISTRIBUTED_DEBUG"]="DETAIL"
 # os.environ['CUDA_LAUNCH_BLOCKING'] = "1"
@@ -42,28 +41,15 @@ def dict_print(d : dict, indent = 0) -> None:
         else:
             print(v)
 
-def run():
-    config = wandb.config
-    trainer = Imgtrainer(**config)
-    trainer.run()
-
 # MAIN FUNCTION
-def main(kwargs):
-    dict_print(kwargs)
-    wandb.init(project=kwargs['project'], name=kwargs['name'], config=kwargs, config_exclude_keys=['sweep', 'project', 'name'])
-    print(wandb.config)
-    if kwargs['sweep']:
-        logger.info("Starting sweep")
-        logger.info("Sweep config must be defined in helper/sweep.py.")
-        sweep_id = wandb.sweep(sweep_config)
-        wandb.agent(sweep_id, function=run)
-    else:
-        run()
-
+def main(args):
+    #dict_print(args)
+    trainer = Imgtrainer(**args)
+    trainer.run()
 
 if __name__ == "__main__":
     mp.set_start_method('spawn')
-    kwargs = vars(parse_args(sys.argv[1:]))
-    main(kwargs)
+    args = vars(parse_args(sys.argv[1:]))
+    main(args)
     print("Done")
     time.sleep(10)

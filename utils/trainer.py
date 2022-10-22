@@ -2,7 +2,7 @@ import os
 import random
 import time
 
-import wandb
+import pprint
 import matplotlib.pyplot as plt
 import pandas as pd
 import torch
@@ -10,13 +10,16 @@ import torch.backends.cudnn as cudnn
 import torch.distributed as dist
 import torch.multiprocessing as mp
 import torchvision.transforms as transforms
+import wandb
 from data.Dataset5 import Dataset5
+from helper.argvs import (get_criterion, get_dataset, get_model, get_optimizer,
+                          get_scheduler)
 from helper.metric import AverageMeter, ProgressMeter, Summary, accuracy
-from tsne_torch import TorchTSNE as TSNE
+from sweep.sweep import sweep_config
 from torch.utils.data import DataLoader
+from tsne_torch import TorchTSNE as TSNE
 
 from utils.sampler import CILSampler
-from helper.argvs import get_model, get_criterion, get_optimizer, get_scheduler, get_dataset
 
 ########################################################################################################################
 # This is trainer with a DistributedDataParallel                                                                       #
@@ -30,6 +33,7 @@ from helper.argvs import get_model, get_criterion, get_optimizer, get_scheduler,
 
 class Imgtrainer():
     def __init__(self,
+                 project, name, entity, sweep,
                  model, model_args,
                  criterion,
                  optimizer, optimizer_args,
@@ -39,13 +43,18 @@ class Imgtrainer():
                  dataset, num_workers, dataset_path, save_path, eval,
                  seed, device, pin_mem, use_amp, use_tf, debug,
                  world_size, dist_url, dist_backend, rank, local_rank,
-                 *args, **kwargs) -> None:
+                 *args) -> None:
+
+        self.project = project
+        self.entity  = entity
+        self.name    = name
+        self.sweep   = sweep
 
         # Model and Training Settings
-        self.model, self.model_args = get_model(model), model_args
+        self.model_base, self.model_args = get_model(model), model_args
         self.criterion = get_criterion(criterion)
-        self.optimizer, self.optimizer_args = get_optimizer(optimizer), optimizer_args
-        self.scheduler, self.scheduler_args = get_scheduler(scheduler), scheduler_args
+        self.optimizer_base, self.optimizer_args = get_optimizer(optimizer), optimizer_args
+        self.scheduler_base, self.scheduler_args = get_scheduler(scheduler), scheduler_args
 
         self.epoch  = 0
         self.epochs = epochs
@@ -93,29 +102,43 @@ class Imgtrainer():
         self.dataset_train   = self.dataset(self.dataset_path, download=True, train=True,  transform=self.train_transform)
         self.dataset_val     = self.dataset(self.dataset_path, download=True, train=False, transform=self.var_transform)
 
-        print(self.__dict__)
-
     def run(self):
+        if self.sweep:
+            sweep_id = wandb.sweep(sweep_config, project=self.project, entity=self.entity)
+            wandb.agent(sweep_id, function=self.process_devider, project=self.project, entity=self.entity)
+        else:
+            self.process_devider()
+
+    def process_devider(self):
         if self.ngpus_per_nodes > 1: 
             mp.spawn(self.main_worker, (), self.ngpus_per_nodes, True)
         else:
             self.main_worker(self.local_rank)
 
     def main_worker(self, gpu) -> None:
+
+        wandb.init(project=self.project, entity=self.entity, group=self.name, name=self.name)
+        for key, value in wandb.config.items():
+            if isinstance(value, dict):
+                for k, v in value.items():
+                    getattr(self, key)[k] = v
+            else:
+                setattr(self, key, value)
+
         self.gpu    = gpu % self.ngpus_per_nodes
         self.device = torch.device(self.gpu)
         if self.distributed:
-            self.local_rank = gpu
+            self.local_rank = self.gpu
             if 'SLURM_PROCID' in os.environ.keys():
-                self.rank = int(os.environ['SLURM_PROCID']) * self.ngpus_per_nodes + gpu
+                self.rank = int(os.environ['SLURM_PROCID']) * self.ngpus_per_nodes + self.gpu
                 print(f"| Init Process group {os.environ['SLURM_PROCID']} : {self.local_rank}")
             else :
-                self.rank = gpu
+                self.rank = self.gpu
                 print(f"| Init Process group 0 : {self.local_rank}")
             if 'MASTER_ADDR' not in os.environ.keys():
                 os.environ['MASTER_ADDR'] = '127.0.0.1'
                 os.environ['MASTER_PORT'] = '12701'
-            torch.cuda.set_device(gpu)
+            torch.cuda.set_device(self.gpu)
             time.sleep(self.rank * 0.1) # prevent port collision
             dist.init_process_group(backend=self.dist_backend, init_method=self.dist_url,
                                     world_size=self.world_size, rank=self.rank)
@@ -123,6 +146,7 @@ class Imgtrainer():
         else:
             pass
 
+        pprint.pprint(self.__dict__)
         if self.seed is not None:
             seed = self.seed #+ self.rank
             random.seed(seed)
@@ -155,16 +179,18 @@ class Imgtrainer():
         self.batch_size = int(self.batch_size // self.world_size)
 
         print("Building model...")
-        self.model = self.model(**self.model_args)
+        self.model = self.model_base(**self.model_args)
+        wandb.watch(self.model)
         self.model.to(self.device)
+        wandb.watch(self.model)
         self.model_without_ddp = self.model
         if self.distributed:
             self.model = torch.nn.parallel.DistributedDataParallel(self.model)
             self.model._set_static_graph()
             self.model_without_ddp = self.model.module
         self.criterion = self.model_without_ddp.loss_fn if self.criterion == 'custom' else self.criterion()
-        self.optimizer = self.optimizer(self.model.parameters(), **self.optimizer_args)
-        self.scheduler = self.scheduler(self.optimizer, **self.scheduler_args)
+        self.optimizer = self.optimizer_base(self.model.parameters(), **self.optimizer_args)
+        self.scheduler = self.scheduler_base(self.optimizer, **self.scheduler_args)
 
         self.load(self.model_without_ddp, self.optimizer, self.scheduler, self.epoch)
 
@@ -210,12 +236,13 @@ class Imgtrainer():
                 accuracy_matrix[self.task, self.test] = self.validate(loader_val, self.model, self.criterion)
 
             self.epoch = 0
-            optimizer = self.optimizer(self.model.parameters(), **self.optimizer_args)
+            optimizer = self.optimizer_base(self.model.parameters(), **self.optimizer_args)
             print('')
         print("Selection : ",(self.model_without_ddp._convert_train_task(self.sampler_train.get_task())-1).tolist())
         print(f"Accuracy Matrix :\n{accuracy_matrix.numpy()} \n Average Accuracy : {accuracy_matrix[-1,:].mean().item()}")
         forgetting = accuracy_matrix.max(dim=0)[0] - accuracy_matrix[-1, :]
         print(f"Forgetting : {forgetting.numpy()} \n Average Forgetting : {forgetting.mean().item()}")
+        wandb.log({'Average_Accuracy' : accuracy_matrix[-1,:].mean().item(),'Average_Forgetting' : forgetting.mean().item()})
         self.save(self.model_without_ddp, optimizer, self.scheduler, self.epoch)
 
         if self.is_main_process():
@@ -316,7 +343,7 @@ class Imgtrainer():
                 progress.display(i + 1)
         if self.use_tf:
             progress.write_summary(epoch = self.task * self. epochs + self.epoch, save_path = self.save_path, prefix='Train/')
-            wandb.log({'Train/Loss': losses.avg, 'Train/Acc@1': top1.avg, 'Train/Acc@5': top5.avg}, step = self.task * self.epochs + self.epoch)
+        wandb.log({'Train/Loss': losses.avg, 'Train/Acc@1': top1.avg, 'Train/Acc@5': top5.avg}, step = self.task * self.epochs + self.epoch)
                 
     def validate(self, loader, model, criterion):
         
@@ -355,7 +382,7 @@ class Imgtrainer():
         progress.display_summary()
         if self.use_tf:
             progress.write_summary(epoch = self.task, save_path = self.save_path, prefix='Test/task{}/'.format(self.test))
-            wandb.log({'Test/Loss': losses.avg, 'Test/Acc@1': top1.avg, 'Test/Acc@5': top5.avg}, step = self.task)
+        wandb.log({'Test/Loss': losses.avg, 'Test/Acc@1': top1.avg, 'Test/Acc@5': top5.avg}, step = self.task)
         return top1.avg
 
     def save_on_master(self):

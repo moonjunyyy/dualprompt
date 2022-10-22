@@ -28,6 +28,7 @@ parser = argparse.ArgumentParser(description = 'Train and Evaluate Model')
 
 parser.add_argument("--sweep",          action = "store_true", help = "Run sweep")
 parser.add_argument("--project"       , type=str, default="default", help="Project name for wandb")
+parser.add_argument("--entity"        , type=str, default="default", help="Entity name for wandb")
 parser.add_argument("--name"          , type=str, default="default", help="Name of the run")
 
 parser.add_argument("--model"         , type=str, help="model name to train or evaluate")
