@@ -105,7 +105,7 @@ class Imgtrainer():
     def run(self):
         if self.sweep:
             sweep_id = wandb.sweep(sweep_config, project=self.project, entity=self.entity)
-            wandb.agent(sweep_id, function=self.process_devider, project=self.project, entity=self.entity)
+            wandb.agent(sweep_id, function=self.process_devider, project=self.project, entity=self.entity, count=100)
         else:
             self.process_devider()
 
@@ -145,10 +145,10 @@ class Imgtrainer():
             self.setup_for_distributed(self.is_main_process())
         else:
             pass
-
-        pprint.pprint(self.__dict__)
+        if self.is_main_process():
+            pprint.pprint(self.__dict__)
         if self.seed is not None:
-            seed = self.seed #+ self.rank
+            seed = self.seed
             random.seed(seed)
             torch.manual_seed(seed)
             cudnn.deterministic = True

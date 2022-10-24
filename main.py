@@ -31,6 +31,8 @@ default_cfgs['vit_base_patch16_224_l2p'] = _cfg(
         url='https://storage.googleapis.com/vit_models/imagenet21k/ViT-B_16.npz',
         num_classes=21843)
 
+os.environ['WANDB_AGENT_MAX_INITIAL_FAILURES'] = '100'
+
 # Print the dictionary in a nice way
 def dict_print(d : dict, indent = 0) -> None:
     for k, v in d.items():
