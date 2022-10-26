@@ -7,8 +7,9 @@ sweep_config = {
     "parameters" : {
         "model_args" : {
             "parameters" : {
-                "lambd" : {'max': 1e8, 'min': 1e-8},
-                "zetta" : {'max': 1e8, 'min': 1e-8}
+                "lambd" : {'max': 1e4, 'min': 1e-4},
+                "zetta" : {'max': 1e4, 'min': 1e-4},
+                "xi"    : {'max': 10,  'min': 1e-4},
             }
         }
     }

@@ -15,9 +15,10 @@ from data.Dataset5 import Dataset5
 from helper.argvs import (get_criterion, get_dataset, get_model, get_optimizer,
                           get_scheduler)
 from helper.metric import AverageMeter, ProgressMeter, Summary, accuracy
+from models.GausskeyL2P import GausskeyL2P
 from sweep.sweep import sweep_config
 from torch.utils.data import DataLoader
-from tsne_torch import TorchTSNE as TSNE
+from sklearn.manifold import TSNE
 
 from utils.sampler import CILSampler
 
@@ -147,6 +148,7 @@ class Imgtrainer():
             pass
         if self.is_main_process():
             pprint.pprint(self.__dict__)
+
         if self.seed is not None:
             seed = self.seed
             random.seed(seed)
@@ -180,9 +182,8 @@ class Imgtrainer():
 
         print("Building model...")
         self.model = self.model_base(**self.model_args)
-        wandb.watch(self.model)
         self.model.to(self.device)
-        wandb.watch(self.model)
+        # wandb.watch(self.model)
         self.model_without_ddp = self.model
         if self.distributed:
             self.model = torch.nn.parallel.DistributedDataParallel(self.model)
@@ -201,9 +202,7 @@ class Imgtrainer():
         print("")
 
     def CIL_Train(self):
-
         self.setup_dataset_for_distributed()
-
         ViT_Features = [torch.empty((0, self.model_without_ddp.backbone.num_features), device=self.device) for i in range(self.num_tasks)]
         accuracy_matrix = torch.zeros((self.num_tasks, self.num_tasks))
         for self.task in range(self.num_tasks):
@@ -211,6 +210,7 @@ class Imgtrainer():
             print("Selection : ",(self.model_without_ddp._convert_train_task(self.sampler_train.get_task()).to(torch.int) - 1).tolist())
             print(f"Training for task {self.task} : {self.sampler_train.get_task().tolist()}")
 
+            # Features for Tsne plot 
             for i, (data, target) in enumerate(loader_train):
                 data = data.to(self.device)
                 x = self.model_without_ddp.backbone.patch_embed(data)
@@ -234,42 +234,72 @@ class Imgtrainer():
             for self.test in range(self.task + 1):
                 loader_val = self.set_task(self.dataset_val, self.sampler_val, self.test) 
                 accuracy_matrix[self.task, self.test] = self.validate(loader_val, self.model, self.criterion)
-
+            
             self.epoch = 0
-            optimizer = self.optimizer_base(self.model.parameters(), **self.optimizer_args)
+            self.optimizer = self.optimizer_base(self.model.parameters(), **self.optimizer_args)
             print('')
+
         print("Selection : ",(self.model_without_ddp._convert_train_task(self.sampler_train.get_task())-1).tolist())
         print(f"Accuracy Matrix :\n{accuracy_matrix.numpy()} \n Average Accuracy : {accuracy_matrix[-1,:].mean().item()}")
         forgetting = accuracy_matrix.max(dim=0)[0] - accuracy_matrix[-1, :]
         print(f"Forgetting : {forgetting.numpy()} \n Average Forgetting : {forgetting.mean().item()}")
         wandb.log({'Average_Accuracy' : accuracy_matrix[-1,:].mean().item(),'Average_Forgetting' : forgetting.mean().item()})
-        self.save(self.model_without_ddp, optimizer, self.scheduler, self.epoch)
+        self.save(self.model_without_ddp, self.optimizer, self.scheduler, self.epoch)
 
         if self.is_main_process():
-            N, D = ViT_Features[0].shape
-            vec = torch.empty((0, D), device=ViT_Features[0].device)
-            N = int(5000/self.num_tasks)     # Too much vectors make OOM Problem
-            for n, f in enumerate(ViT_Features):
-                vec = torch.concat((vec, f[:N]), dim = 0)
-            P, D = self.model_without_ddp.prompt.key.shape
-            vec = torch.concat((vec, self.model_without_ddp.prompt.key), dim = 0)
-            vec = TSNE(initial_dims=D).fit_transform((vec/vec.max()).nan_to_num(0))
-            pd.DataFrame(vec).to_csv(f"{self.save_path}ViT_Features.csv")
-            for n in range(len(ViT_Features)):
-                plt.scatter(vec[N * n : N * (n + 1),0], vec[N * n : N * (n + 1),1], s=1)
-            plt.scatter(vec[-self.model_without_ddp.prompt.pool_size:, 0], vec[-self.model_without_ddp.prompt.pool_size:, 1], s=15, marker='+', color='black')
-            plt.axis()
-            plt.savefig(f"{self.save_path}ViT_Features.png")
-            plt.clf()
+            if self.model_base == GausskeyL2P:
+                N, D = ViT_Features[0].shape
+                vec = torch.empty((0, D), device=ViT_Features[0].device)
+                N = int(5000/self.num_tasks)     # Too much vectors make OOM Problem
+                for n, f in enumerate(ViT_Features):
+                    vec = torch.concat((vec, f[:N]), dim = 0)
+                P, D = self.model_without_ddp.mean.shape
+                vec = torch.concat((vec, self.model_without_ddp.mean), dim = 0)
 
-            P, L, D = self.model_without_ddp.prompt.prompts.shape
-            vec = TSNE(initial_dims=D).fit_transform(self.model_without_ddp.prompt.prompts.reshape(-1, D) / D)
-            pd.DataFrame(vec).to_csv(f"{self.save_path}prompts.csv")
-            for p in range(P):
-                plt.scatter(vec[p*L : (p+1)*L, 0], vec[p*L : (p+1)*L, 1], s=1)
-            plt.axis()
-            plt.savefig(f"{self.save_path}prompts.png")
-            plt.clf()
+                pd.DataFrame(vec.cpu().detach().numpy()).to_csv(f"{self.save_path}RAW_ViT_Features.csv")
+                vec = TSNE().fit_transform((vec.cpu().detach().numpy()))
+                pd.DataFrame(vec).to_csv(f"{self.save_path}ViT_Features.csv")
+                for n in range(len(ViT_Features)):
+                    plt.scatter(vec[N * n : N * (n + 1),0], vec[N * n : N * (n + 1),1], s=1)
+                plt.scatter(vec[-self.model_without_ddp.pool_size:, 0], vec[-self.model_without_ddp.pool_size:, 1], s=15, marker='+', color='black')
+                plt.axis()
+                plt.savefig(f"{self.save_path}ViT_Features.png")
+                plt.clf()
+
+                P, L, D = self.model_without_ddp.prompt.shape
+                vec = TSNE().fit_transform(self.model_without_ddp.prompt.reshape(-1, D).cpu().detach().numpy())
+                pd.DataFrame(vec).to_csv(f"{self.save_path}prompts.csv")
+                for p in range(P):
+                    plt.scatter(vec[p*L : (p+1)*L, 0], vec[p*L : (p+1)*L, 1], s=1)
+                plt.axis()
+                plt.savefig(f"{self.save_path}prompts.png")
+                plt.clf()
+            else:
+                N, D = ViT_Features[0].shape
+                vec = torch.empty((0, D), device=ViT_Features[0].device)
+                N = int(5000/self.num_tasks)     # Too much vectors make OOM Problem
+                for n, f in enumerate(ViT_Features):
+                    vec = torch.concat((vec, f[:N]), dim = 0)
+                pd.DataFrame(vec.cpu().detach().numpy()).to_csv(f"{self.save_path}RAW_ViT_Features.csv")
+                P, D = self.model_without_ddp.prompt.key.shape
+                vec = torch.concat((vec, self.model_without_ddp.prompt.key), dim = 0)
+                vec = TSNE().fit_transform((vec.cpu().detach().numpy()))
+                pd.DataFrame(vec).to_csv(f"{self.save_path}ViT_Features.csv")
+                for n in range(len(ViT_Features)):
+                    plt.scatter(vec[N * n : N * (n + 1),0], vec[N * n : N * (n + 1),1], s=1)
+                plt.scatter(vec[-self.model_without_ddp.prompt.pool_size:, 0], vec[-self.model_without_ddp.prompt.pool_size:, 1], s=15, marker='+', color='black')
+                plt.axis()
+                plt.savefig(f"{self.save_path}ViT_Features.png")
+                plt.clf()
+
+                P, L, D = self.model_without_ddp.prompt.prompts.shape
+                vec = TSNE().fit_transform(self.model_without_ddp.prompt.prompts.reshape(-1, D).cpu().detach().numpy())
+                pd.DataFrame(vec).to_csv(f"{self.save_path}prompts.csv")
+                for p in range(P):
+                    plt.scatter(vec[p*L : (p+1)*L, 0], vec[p*L : (p+1)*L, 1], s=1)
+                plt.axis()
+                plt.savefig(f"{self.save_path}prompts.png")
+                plt.clf()
         return
 
     def Single_Task_Train(self):
