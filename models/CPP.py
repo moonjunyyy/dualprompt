@@ -10,7 +10,6 @@ class CPP(L2P):
                  len_prompt     : int   = 8,
                  num_centroids  : int   = 5,
                  num_neighbors  : int   = 20,
-                 prompt_func    : str   = None,
                  task_num       : int   = 10,
                  class_num      : int   = 100,
                  lambd          : float = 1.0,
@@ -25,21 +24,16 @@ class CPP(L2P):
         del(self.prompt_len)
 
         self.tasks = []
-
-        self.register_buffer('pos_g_prompt', torch.tensor(pos_g_prompt, dtype= torch.int64))
-        self.register_buffer('pos_e_prompt', torch.tensor(pos_e_prompt, dtype= torch.int64))
-        
+        self.num_centroids = num_centroids
+        self.num_neighbors = num_neighbors
         self.len_prompt = len_prompt
         
         e_pool = class_num
         self.g_length = len(self.backbone.blocks)
         
-        elif prompt_func == 'prefix_tuning':
-            self.prompt_func = self.prefix_tuning
-            self.prompt = Prompt(e_pool, 1, 2 * self.e_length * self.len_e_prompt, self.backbone.num_features, batchwise_selection = True)
+        self.prompt_func = self.prefix_tuning
+        self.prompt = Prompt(e_pool, 1, 2 * self.e_length * self.len_e_prompt, self.backbone.num_features, batchwise_selection = True)
 
-        else: raise ValueError('Unknown prompt_func: {}'.format(prompt_func))
-        
         self.task_num = task_num
         self.task_id = -1 # if _convert_train_task is not called, task will undefined
     
