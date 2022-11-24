@@ -16,6 +16,10 @@ import wandb
 # os.environ["TORCH_DISTRIBUTED_DEBUG"]="DETAIL"
 # os.environ['CUDA_LAUNCH_BLOCKING'] = "1"
 
+default_cfgs['vit_base_patch16_224_l2p'] = _cfg(
+        url='https://storage.googleapis.com/vit_models/imagenet21k/ViT-B_16.npz',
+        num_classes=21843)
+
 # Register the backbone model to timm
 @register_model
 def vit_base_patch16_224_l2p(pretrained=False, **kwargs):
@@ -27,10 +31,6 @@ def vit_base_patch16_224_l2p(pretrained=False, **kwargs):
         patch_size=16, embed_dim=768, depth=12, num_heads=12, **kwargs)
     model = _create_vision_transformer('vit_base_patch16_224_l2p', pretrained=pretrained, **model_kwargs)
     return model
-
-default_cfgs['vit_base_patch16_224_l2p'] = _cfg(
-        url='https://storage.googleapis.com/vit_models/imagenet21k/ViT-B_16.npz',
-        num_classes=21843)
 
 os.environ['WANDB_AGENT_MAX_INITIAL_FAILURES'] = '100'
 os.environ['WANDB_API_KEY']='248bc1773e3aafd753ce7429527187cbb0dd53cd'

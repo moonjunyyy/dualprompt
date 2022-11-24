@@ -27,7 +27,7 @@ class DualPrompt(L2P):
         del(self.selection_size)
         del(self.prompt_len)
 
-        self.tasks = []
+        self.register_buffer('tasks', torch.empty((0, 10), dtype=torch.long))
 
         self.register_buffer('pos_g_prompt', torch.tensor(pos_g_prompt, dtype= torch.int64))
         self.register_buffer('pos_e_prompt', torch.tensor(pos_e_prompt, dtype= torch.int64))
@@ -149,7 +149,7 @@ class DualPrompt(L2P):
 
         x = self.prompt_func(t + self.backbone.pos_embed, g_p.clone(), e_p.clone())
         x = self.backbone.norm(x)
-        x = self.backbone.head(x[:, 0])
+        x = self.backbone.head(x[:, 0].clone())
 
         self.simmilairty = e_s.sum()
         return x
@@ -157,11 +157,11 @@ class DualPrompt(L2P):
     def convert_train_task(self, task : torch.Tensor, **kwargs):
         flag = -1
         for n, t in enumerate(self.tasks):
-            if torch.equal(t, task):
+            if torch.equal(t, task.clone()):
                 flag = n
                 break
         if flag == -1:
-            self.tasks.append(task)
+            self.tasks = torch.cat((self.tasks, task.unsqueeze(0)), dim = 0)
             self.task_id = len(self.tasks) - 1
         else :
             self.task_id = flag

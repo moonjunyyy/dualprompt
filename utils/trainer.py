@@ -98,7 +98,7 @@ class Imgtrainer():
         self.distributed     = self.world_size > 1
         
         #TODO : Transform needs to be diversed and be selected by user
-        self.train_transform = transforms.Compose([transforms.AutoAugment(),transforms.Resize((224, 224)), transforms.ToTensor ()])
+        self.train_transform = transforms.Compose([transforms.Resize((224, 224)), transforms.ToTensor ()])
         self.var_transform   = transforms.Compose([transforms.Resize((224, 224)), transforms.ToTensor ()])
         self.random_class = not self.dataset == Dataset5
 
