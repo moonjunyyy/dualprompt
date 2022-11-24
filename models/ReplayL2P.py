@@ -4,11 +4,12 @@ import timm
 import torch
 import torch.nn as nn
 import torch.nn.functional as F
+import torch.distributed as dist
 from layers.Prompt import Prompt
 
 T = TypeVar('T', bound = 'nn.Module')
 
-class L2P(nn.Module):
+class ReplayL2P(nn.Module):
     def __init__(self,
                  pool_size      : int   = 10,
                  selection_size : int   = 5,
@@ -38,15 +39,15 @@ class L2P(nn.Module):
         self.lambd = lambd
         self.tau   = tau
         self.xi    = xi
-        self._batchwise_selection = _batchwise_selection
-        self._scale_prompts       = _scale_prompts
-        self._unsim_penalty       = _unsim_penalty
-        self._scale_simmilarity   = _scale_simmilarity
-        self._update_per_iter     = _update_per_iter
+        self._batchwise_selection = False
+        self._scale_prompts       = False
+        self._unsim_penalty       = False
+        self._scale_simmilarity   = False
+        self._update_per_iter     = False
         self.class_num            = class_num
 
         self.add_module('backbone', timm.create_model(backbone_name, pretrained=True, num_classes=class_num))
-        for name, param in self.backbone.named_parameters():
+        for param in self.backbone.parameters():
             param.requires_grad = False
         self.backbone.head.weight.requires_grad = True
         self.backbone.head.bias.requires_grad   = True
@@ -56,77 +57,111 @@ class L2P(nn.Module):
             selection_size,
             prompt_len,
             self.backbone.num_features,
-            _diversed_selection  = _diversed_selection,
-            _batchwise_selection = _batchwise_selection,
-            _get_unsimmilarity   = _unsim_penalty)
+            _diversed_selection  = False,
+            _batchwise_selection = False,
+            _get_unsimmilarity   = False)
+
+        self.image_buffer = nn.parameter.Parameter(torch.rand(class_num, 196, self.backbone.num_features), requires_grad=True)
 
         self.register_buffer('simmilarity', torch.zeros(1))
         self.register_buffer('unsimmilarity', torch.zeros(1))
         self.register_buffer('mask', torch.zeros(class_num))
+        self.register_buffer('replay_mask', torch.zeros(class_num, dtype=torch.bool))
     
     def forward(self, inputs : torch.Tensor, **kwargs) -> torch.Tensor:
-        x = self.backbone.patch_embed(inputs)
+        B,_,_,_ = inputs.size()
+        
+        if self.training:
+            
+            self.image_buffer_replay(self.replay_mask, B)
 
+        x = self.backbone.patch_embed(inputs)
         B, N, D = x.size()
+
         cls_token = self.backbone.cls_token.expand(B, -1, -1)
         token_appended = torch.cat((cls_token, x), dim=1)
         x = self.backbone.pos_drop(token_appended + self.backbone.pos_embed)
 
         query = self.backbone.blocks(x)
         query = self.backbone.norm(query)[:, 0].clone()
+        simmilarity, prompts = self.prompt(query)
+        self.simmilarity = simmilarity.sum()
 
-        if self._unsim_penalty:
-            simmilarity, unsimmilarity, prompts, _ = self.prompt(query)
-        else:
-            simmilarity, prompts = self.prompt(query)
-
-        if self._scale_simmilarity:
-            freq = F.normalize(self.prompt.frequency.reciprocal(), p=1, dim=-1)
-            self.simmilarity       =  (simmilarity * freq.repeat(B, 1).gather(1, self.prompt.topk)).sum()
-            if self._unsim_penalty:
-                self.unsimmilarity = (unsimmilarity * freq.repeat(B, 1).gather(1, self.prompt.nonk)).sum()
-        else:
-            self.simmilarity       =   simmilarity.sum()
-            if self._unsim_penalty:
-                self.unsimmilarity = unsimmilarity.sum()
-
-            
-        if self._scale_prompts :
-            scale = ((simmilarity - 1).detach() * self.tau).exp()
-            prompts = (prompts * scale.unsqueeze(-1).unsqueeze(-1).expand(-1, -1, self.prompt_len, D)).contiguous().view(B, self.selection_size * self.prompt_len, D)
-        else :
-            prompts = prompts.contiguous().view(B, self.selection_size * self.prompt_len, D)
+        prompts = prompts.contiguous().view(B, self.selection_size * self.prompt_len, D)
         prompts = prompts + self.backbone.pos_embed[:,0].clone().expand(self.selection_size * self.prompt_len, -1)
 
         x = self.backbone.pos_drop(token_appended + self.backbone.pos_embed)
         x = torch.cat((x[:,0].unsqueeze(1), prompts, x[:,1:]), dim=1)
-        # x = torch.cat((prompts, x[:,1:]), dim=1)
 
         x = self.backbone.blocks(x)
         x = self.backbone.norm(x)
 
         x = x[:, 1:self.selection_size * self.prompt_len + 1].clone()
-        # x = x[:, :self.selection_size * self.prompt_len].clone()
         x = x.mean(dim=1)
         x = self.backbone.head(x)
 
-        if self._update_per_iter:
-            self.prompt.update()
-
         if self.training:
             x = x + self.mask
+
         return x
-    
+
+    def image_buffer_replay(self, mask, batch_size, **kwargs) -> None:
+
+        classes = torch.arange(0, self.class_num, dtype=torch.long, device=self.mask.device)
+        #classes = classes[mask]
+        class_num = classes.size(0)
+
+        if dist.is_available():
+            rank = dist.get_rank()
+            ngpu = dist.get_world_size()
+        else:
+            rank = 0
+            ngpu = 1
+
+        iter   =   class_num // (batch_size  * ngpu) + 1
+        offset =  (class_num // ngpu) * rank
+        
+        for i in range(iter):
+            if offset + i * ngpu * batch_size >= class_num:
+                break
+            if  offset + (i + 1) * batch_size >= class_num:
+                image = self.image_buffer[classes[offset + i * batch_size * ngpu : (class_num // ngpu) * (rank + 1)]]
+            else:
+                image = self.image_buffer[classes[offset + i * batch_size * ngpu : offset + (i + 1) * batch_size * ngpu]]
+            B, N, D = image.size()
+
+            cls_token = self.backbone.cls_token.expand(B, -1, -1)
+            token_appended = torch.cat((cls_token, image), dim=1)
+            x = self.backbone.pos_drop(token_appended + self.backbone.pos_embed)
+
+            query = self.backbone.blocks(x)
+            query = self.backbone.norm(query)[:, 0].clone()
+
+            simmilarity, prompts = self.prompt(query)
+            prompts = prompts.contiguous().view(B, self.selection_size * self.prompt_len, D)
+            prompts = prompts + self.backbone.pos_embed[:,0].clone().expand(self.selection_size * self.prompt_len, -1)
+            x = self.backbone.pos_drop(token_appended + self.backbone.pos_embed)
+            x = torch.cat((x[:,0].unsqueeze(1), prompts, x[:,1:]), dim=1)
+
+            x = self.backbone.blocks(x)
+            x = self.backbone.norm(x)
+
+            x = x[:, 1:self.selection_size * self.prompt_len + 1].clone()
+            x = x.mean(dim=1)
+            x = self.backbone.head(x)
+
+            lable = classes[rank + i * batch_size * ngpu : rank + i * batch_size * ngpu + B]
+            (F.cross_entropy(x, lable) * 0.01).backward()
+
     def loss_fn(self, output, target):
         B, C = output.size()
-        if self._unsim_penalty:
-            return F.cross_entropy(output, target) + self.lambd * self.simmilarity - self.xi * self.unsimmilarity
-        else :
-            return F.cross_entropy(output, target) + self.lambd * self.simmilarity
+        return F.cross_entropy(output, target) + self.lambd * self.simmilarity
 
     def convert_train_task(self, task : torch.Tensor, **kwargs):
         self.mask += -torch.inf
         self.mask[task.to(self.mask.device)] = 0
+
+        self.replay_mask[self.mask.eq(0)] = True
         return
 
     def get_count(self):

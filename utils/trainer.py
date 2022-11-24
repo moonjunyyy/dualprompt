@@ -18,6 +18,7 @@ from helper.metric import AverageMeter, ProgressMeter, Summary, accuracy
 from models.GausskeyL2P import GausskeyL2P
 from sweep.sweep import sweep_config
 from torch.utils.data import DataLoader
+from torchvision.datasets import ImageFolder, ImageNet
 from sklearn.manifold import TSNE
 
 from utils.sampler import CILSampler
@@ -31,15 +32,15 @@ from utils.sampler import CILSampler
 ########################################################################################################################
 
 # TODO : Other Task Settings (TIL, Task Agnostic)
-
 class Imgtrainer():
+    
     def __init__(self,
                  project, name, entity, sweep,
                  model, model_args,
                  criterion,
                  optimizer, optimizer_args,
                  scheduler, scheduler_args,
-                 batch_size, step_size, epochs, log_frequency,
+                 batch_size, step_size, epochs, log_frequency, grad_clip,
                  task_governor, num_tasks,
                  dataset, num_workers, dataset_path, save_path, eval,
                  seed, device, pin_mem, use_amp, use_tf, debug,
@@ -63,6 +64,7 @@ class Imgtrainer():
         self.step_size     = int(step_size // batch_size)
         self.log_frequency = log_frequency
         self.task_governor = task_governor # CIL or Single
+        self.grad_clip     = grad_clip
         
         # Dataset Settings
         self.num_tasks    = num_tasks
@@ -96,12 +98,19 @@ class Imgtrainer():
         self.distributed     = self.world_size > 1
         
         #TODO : Transform needs to be diversed and be selected by user
-        self.train_transform = transforms.Compose([transforms.Resize((224, 224)), transforms.ToTensor ()])
+        self.train_transform = transforms.Compose([transforms.AutoAugment(),transforms.Resize((224, 224)), transforms.ToTensor ()])
         self.var_transform   = transforms.Compose([transforms.Resize((224, 224)), transforms.ToTensor ()])
-
         self.random_class = not self.dataset == Dataset5
-        self.dataset_train   = self.dataset(self.dataset_path, download=True, train=True,  transform=self.train_transform)
-        self.dataset_val     = self.dataset(self.dataset_path, download=True, train=False, transform=self.var_transform)
+
+        if self.dataset==ImageNet:
+            #TODO : Transform needs to be diversed and be selected by user
+            self.train_transform = transforms.Compose([transforms.AutoAugment(), transforms.Resize((224, 224)), transforms.ToTensor ()])
+            self.var_transform   = transforms.Compose([transforms.Resize((224, 224)), transforms.ToTensor ()])
+            self.dataset_train   = self.dataset(self.dataset_path, split = 'train',  transform=self.train_transform)
+            self.dataset_val     = self.dataset(self.dataset_path, split = 'val',    transform=self.var_transform)
+        else:
+            self.dataset_train   = self.dataset(self.dataset_path, download=True, train=True,  transform=self.train_transform)
+            self.dataset_val     = self.dataset(self.dataset_path, download=True, train=False, transform=self.var_transform)
 
     def run(self):
         if self.sweep:
@@ -111,21 +120,29 @@ class Imgtrainer():
             self.process_devider()
 
     def process_devider(self):
-        if self.ngpus_per_nodes > 1: 
-            mp.spawn(self.main_worker, (), self.ngpus_per_nodes, True)
-        else:
-            self.main_worker(self.local_rank)
-
-    def main_worker(self, gpu) -> None:
-
-        wandb.init(project=self.project, entity=self.entity, group=self.name, name=self.name)
+        wandb.init()
         for key, value in wandb.config.items():
             if isinstance(value, dict):
                 for k, v in value.items():
                     getattr(self, key)[k] = v
             else:
                 setattr(self, key, value)
+        pprint.pprint(self.__dict__)
+        wandb.finish()
+        if self.ngpus_per_nodes > 1: 
+            # mp.spawn(self.main_worker, (), self.ngpus_per_nodes, True)
+            processes = []
+            for i in range(0, self.ngpus_per_nodes):
+                p = mp.Process(target=self.main_worker, args=(i,), )
+                processes.append(p)
+                p.start()
+            for p in processes:
+                p.join()
+        else:
+            self.main_worker(self.local_rank)
 
+    def main_worker(self, gpu) -> None:
+        
         self.gpu    = gpu % self.ngpus_per_nodes
         self.device = torch.device(self.gpu)
         if self.distributed:
@@ -146,8 +163,9 @@ class Imgtrainer():
             self.setup_for_distributed(self.is_main_process())
         else:
             pass
+
         if self.is_main_process():
-            pprint.pprint(self.__dict__)
+            wandb.init(project=self.project, entity=self.entity, group=self.name, name=self.name)
 
         if self.seed is not None:
             seed = self.seed
@@ -171,6 +189,9 @@ class Imgtrainer():
                 self.CIL_Eval()
             else:
                 self.Single_Task_Eval()
+
+        if self.is_main_process():
+            wandb.finish()
 
     def setup_dataset_for_distributed(self):
         _r = dist.get_rank() if self.distributed else None       # means that it is not distributed
@@ -207,7 +228,7 @@ class Imgtrainer():
         accuracy_matrix = torch.zeros((self.num_tasks, self.num_tasks))
         for self.task in range(self.num_tasks):
             loader_train = self.set_task(self.dataset_train, self.sampler_train, self.task)
-            print("Selection : ",(self.model_without_ddp._convert_train_task(self.sampler_train.get_task()).to(torch.int) - 1).tolist())
+            self.model_without_ddp.convert_train_task(self.sampler_train.get_task())
             print(f"Training for task {self.task} : {self.sampler_train.get_task().tolist()}")
 
             # Features for Tsne plot 
@@ -219,7 +240,6 @@ class Imgtrainer():
                 cls_token = self.model_without_ddp.backbone.cls_token.expand(B, -1, -1)
                 t = torch.cat((cls_token, x), dim=1)
                 x = self.model_without_ddp.backbone.pos_drop(t + self.model_without_ddp.backbone.pos_embed)
-
                 q = self.model_without_ddp.backbone.blocks(x)
                 q = self.model_without_ddp.backbone.norm(q)[:, 0].clone()
                 ViT_Features[self.task] = torch.concat((ViT_Features[self.task], q))
@@ -228,22 +248,22 @@ class Imgtrainer():
             for self.epoch in range(self.epochs):
                 self.sampler_train.set_epoch(self.epoch)
                 self.train(loader_train, self.model, self.criterion, self.optimizer)
-                print('')
                 self.scheduler.step()
-
+                print('')
+            print("Selection : ",(self.model_without_ddp.get_count().to(torch.int)).tolist(), end='\n\n')
             for self.test in range(self.task + 1):
                 loader_val = self.set_task(self.dataset_val, self.sampler_val, self.test) 
                 accuracy_matrix[self.task, self.test] = self.validate(loader_val, self.model, self.criterion)
-            
+                print("Selection : ",(self.model_without_ddp.get_count().to(torch.int)).tolist())
             self.epoch = 0
             self.optimizer = self.optimizer_base(self.model.parameters(), **self.optimizer_args)
             print('')
 
-        print("Selection : ",(self.model_without_ddp._convert_train_task(self.sampler_train.get_task())-1).tolist())
         print(f"Accuracy Matrix :\n{accuracy_matrix.numpy()} \n Average Accuracy : {accuracy_matrix[-1,:].mean().item()}")
         forgetting = accuracy_matrix.max(dim=0)[0] - accuracy_matrix[-1, :]
         print(f"Forgetting : {forgetting.numpy()} \n Average Forgetting : {forgetting.mean().item()}")
-        wandb.log({'Average_Accuracy' : accuracy_matrix[-1,:].mean().item(),'Average_Forgetting' : forgetting.mean().item()})
+        if self.is_main_process():
+            wandb.log({'Average_Accuracy' : accuracy_matrix[-1,:].mean().item(),'Average_Forgetting' : forgetting.mean().item()})
         self.save(self.model_without_ddp, self.optimizer, self.scheduler, self.epoch)
 
         if self.is_main_process():
@@ -353,8 +373,8 @@ class Imgtrainer():
             
             with torch.cuda.amp.autocast(enabled=self.use_amp):
                 # compute output
-                output = self.model(images)
-                loss = self.criterion(output, target)
+                output = model(images)
+                loss = criterion(output, target)
                 # measure accuracy and record loss
                 acc1, acc5 = accuracy(output, target, topk=(1, 5))
                 losses.update(loss.item(), images.size(0))
@@ -366,6 +386,9 @@ class Imgtrainer():
             batch_time.update(time.time() - end)
             end = time.time()
             if i % self.step_size == self.step_size - 1 or i == len(loader) - 1:
+                if self.grad_clip > 0.0:
+                    self.scaler.unscale_(optimizer)
+                    torch.nn.utils.clip_grad_norm_(self.model.parameters(), self.grad_clip)
                 self.scaler.step(optimizer)
                 optimizer.zero_grad()
                 self.scaler.update()
@@ -373,7 +396,9 @@ class Imgtrainer():
                 progress.display(i + 1)
         if self.use_tf:
             progress.write_summary(epoch = self.task * self. epochs + self.epoch, save_path = self.save_path, prefix='Train/')
-        wandb.log({'Train/Loss': losses.avg, 'Train/Acc@1': top1.avg, 'Train/Acc@5': top5.avg}, step = self.task * self.epochs + self.epoch)
+            
+        if self.is_main_process():
+            wandb.log({'Train/Loss': losses.avg, 'Train/Acc@1': top1.avg, 'Train/Acc@5': top5.avg}, step = self.task * self.epochs + self.epoch)
                 
     def validate(self, loader, model, criterion):
         
@@ -412,7 +437,9 @@ class Imgtrainer():
         progress.display_summary()
         if self.use_tf:
             progress.write_summary(epoch = self.task, save_path = self.save_path, prefix='Test/task{}/'.format(self.test))
-        wandb.log({'Test/Loss': losses.avg, 'Test/Acc@1': top1.avg, 'Test/Acc@5': top5.avg}, step = self.task)
+            
+        if self.is_main_process():
+            wandb.log({'Test/Loss': losses.avg, 'Test/Acc@1': top1.avg, 'Test/Acc@5': top5.avg}, step = self.task)
         return top1.avg
 
     def save_on_master(self):

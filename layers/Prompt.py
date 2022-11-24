@@ -52,11 +52,10 @@ class Prompt(nn.Module):
         if self._batchwise_selection:
             idx, counts = topk.unique(sorted=True, return_counts=True)
             _,  mosts  = counts.topk(self.selection_size, largest=True, sorted=True)
-            topk = idx[mosts].clone().expand(B, -1).clone()
+            topk = idx[mosts].clone().expand(B, -1)
 
         # Frequency counter
-        if self.training:
-            self.counter += torch.bincount(topk.contiguous().view(-1), minlength = self.pool_size)
+        self.counter += torch.bincount(topk.contiguous().view(-1), minlength = self.pool_size)
 
         # selected prompts
         self.topk = topk
@@ -76,6 +75,11 @@ class Prompt(nn.Module):
             return simmilarity, selection
     
     def update(self):
-        self.frequency += self.counter
-        self.counter   *= 0
-        return self.frequency
+        if self.training:
+            self.frequency += self.counter
+        counter = self.counter.clone()
+        self.counter *= 0
+        if self.training:
+            return self.frequency - 1
+        else:
+            return counter

@@ -1,12 +1,75 @@
+from dataclasses import astuple
 from typing import TypeVar
 
 import timm
 import torch
 import torch.nn as nn
 import torch.nn.functional as F
-from layers.Prompt import Prompt
+from sklearn.cluster import KMeans, DBSCAN
 
 T = TypeVar('T', bound = 'nn.Module')
+
+class Prompt_Pool(nn.Module):
+    def __init__(self,
+                pool_size          : int   = 10,
+                selection_size     : int   = 5,
+                prompt_len         : int   = 5,
+                prompt_dim         : int   = 768,
+                generate_threshold : float = 0.5,
+                merge_threshold    : float = 0.5,
+                **kwarg) -> None:
+        super().__init__()
+
+        self.pool_size          = pool_size
+        self.selection_size     = selection_size
+        self.prompt_len         = prompt_len
+        self.prompt_dim         = prompt_dim
+        self.generate_threshold = generate_threshold
+        self.merge_threshold    = merge_threshold
+
+        self.register_buffer('key',            torch.randn(1, prompt_dim))
+        self.register_buffer('prompts',        torch.randn(1, prompt_len, prompt_dim))
+        self.register_buffer('num_selections', torch.zeros(1))
+        pass
+    
+    def forward(self, x : torch.Tensor) -> torch.Tensor:
+        B, D = x.shape
+        # calculate cosine similarity between x and query
+        distance = 1 - F.cosine_similarity(x.unsqueeze(1), self.key, dim = -1) # B, N
+        # select distance above threshold
+        sim, idx = distance.min(-1)
+        self.add_prompt(x.reshape(-1, D))
+        self.merge_prompt()
+        
+        distance = 1 - F.cosine_similarity(x.unsqueeze(1), self.key, dim = -1) # B, N
+        # select topk most similar prompts
+        distance, topk = distance.topk(self.selection_size, dim = -1, largest = False, sorted = True)
+        prompt = self.prompts[topk]
+        self.num_selections += topk.reshape(-1).bincount(minlength = self.pool_size)
+        return distance, prompt
+    
+    def add_prompt(self, x : torch.Tensor) -> None:
+        # add prompt to pool
+        N, D = x.shape
+        self.key = torch.cat((self.key, x), dim = 0)
+        self.prompts = torch.cat((self.prompts, torch.randn(N, self.prompt_len, self.prompt_dim, device=self.key.device)), dim = 0)
+        self.num_selections = torch.cat((self.num_selections, torch.zeros(N, device=self.key.device)), dim = 0)
+        return
+
+    def merge_prompt(self) -> None:
+        # merge similar prompts in pool
+        N, D = self.key.shape
+        _np_key = self.key.cpu().numpy()
+        _kMeans = KMeans(n_clusters = self.pool_size, random_state = 0).fit_predict(_np_key)
+        for i in range(self.pool_size):
+            mask = _kMeans == i
+            self.key[i] = self.key[mask].mean(0)
+            self.prompts[i] = self.prompts[mask].mean(0)
+            self.num_selections[i] = self.num_selections[mask].sum()
+        self.key = self.key[:self.pool_size]
+        self.prompts = self.prompts[:self.pool_size]
+        self.num_selections = self.num_selections[:self.pool_size]
+        return
 
 class DyL2P(nn.Module):
     def __init__(self,
@@ -16,13 +79,9 @@ class DyL2P(nn.Module):
                  class_num      : int   = 100,
                  backbone_name  : str   = None,
                  lambd          : float = 0.5,
-                 _cls_at_front         : bool  = False,
-                 _batchwise_selection  : bool  = True,
-                 _mixed_prompt_order   : bool  = False,
-                 _mixed_prompt_token   : bool  = False,
-                 _learnable_pos_emb    : bool  = False,
+                 tau            : float = 0.5,
+                 xi             : float = 0.1,
                  **kwargs):
-
         super().__init__()
         
         if backbone_name is None:
@@ -30,34 +89,24 @@ class DyL2P(nn.Module):
         if pool_size < selection_size:
             raise ValueError('pool_size must be larger than selection_size')
 
-        self.prompt_len = prompt_len
+        self.prompt_len     = prompt_len
         self.selection_size = selection_size
         self.lambd = lambd
-        self._batchwise_selection = _batchwise_selection
-        self.class_num = class_num
-        self._cls_at_front = _cls_at_front
+        self.tau   = tau
+        self.xi    = xi
+        self.class_num            = class_num
 
         self.add_module('backbone', timm.create_model(backbone_name, pretrained=True, num_classes=class_num))
         for param in self.backbone.parameters():
             param.requires_grad = False
         self.backbone.head.weight.requires_grad = True
-        self.backbone.head.bias.requires_grad = True
+        self.backbone.head.bias.requires_grad   = True
 
-        self.prompt = Prompt(
-            pool_size,
-            selection_size,
-            prompt_len,
-            self.backbone.num_features,
-            _batchwise_selection = _batchwise_selection,
-            _mixed_prompt_order = _mixed_prompt_order,
-            _mixed_prompt_token = _mixed_prompt_token)
+        self.prompt = Prompt_Pool(pool_size, selection_size, prompt_len, self.backbone.num_features)
 
-        self.pos_embed = self.backbone.pos_embed.clone().detach()
-        self.pos_embed = nn.Parameter(self.pos_embed, requires_grad=_learnable_pos_emb)
-        
         self.register_buffer('simmilarity', torch.zeros(1))
         self.register_buffer('mask', torch.zeros(class_num))
-        
+    
     def forward(self, inputs : torch.Tensor, **kwargs) -> torch.Tensor:
         x = self.backbone.patch_embed(inputs)
 
@@ -72,21 +121,15 @@ class DyL2P(nn.Module):
         s, p = self.prompt(q)
         self.simmilarity = s.sum()
         p = p.contiguous().view(B, self.selection_size * self.prompt_len, D)
-        p = p + self.pos_embed[:,0].clone().expand(self.selection_size * self.prompt_len, -1)
+        p = p + self.backbone.pos_embed[:,0].clone().expand(self.selection_size * self.prompt_len, -1)
 
-        x = self.backbone.pos_drop(t + self.pos_embed)
-        if self._cls_at_front:
-            x = torch.cat((x[:,0].unsqueeze(1), p, x[:,1:]), dim=1)
-        else :
-            x = torch.cat((p, x), dim=1)
+        x = self.backbone.pos_drop(t + self.backbone.pos_embed)
+        x = torch.cat((x[:,0].unsqueeze(1), p, x[:,1:]), dim=1)
 
         x = self.backbone.blocks(x)
         x = self.backbone.norm(x)
 
-        if self._cls_at_front:
-            x = x[:, 1:self.selection_size * self.prompt_len + 1].clone()
-        else :
-            x = x[:, :self.selection_size * self.prompt_len].clone()
+        x = x[:, 1:self.selection_size * self.prompt_len + 1].clone()
         x = x.mean(dim=1)
         x = self.backbone.head(x)
 
@@ -101,7 +144,7 @@ class DyL2P(nn.Module):
     def _convert_train_task(self, task : torch.Tensor, **kwargs):
         self.mask += -torch.inf
         self.mask[task.to(self.mask.device)] = 0
-        return self.prompt.update()
+        return self.prompt.num_selections
 
     def train(self: T, mode: bool = True, **kwargs) -> T:
         ten = super().train(mode)

@@ -8,7 +8,7 @@ from layers.Prompt import Prompt
 
 T = TypeVar('T', bound = 'nn.Module')
 
-class L2P(nn.Module):
+class InViTL2P(nn.Module):
     def __init__(self,
                  pool_size      : int   = 10,
                  selection_size : int   = 5,
@@ -46,7 +46,7 @@ class L2P(nn.Module):
         self.class_num            = class_num
 
         self.add_module('backbone', timm.create_model(backbone_name, pretrained=True, num_classes=class_num))
-        for name, param in self.backbone.named_parameters():
+        for param in self.backbone.parameters():
             param.requires_grad = False
         self.backbone.head.weight.requires_grad = True
         self.backbone.head.bias.requires_grad   = True
@@ -65,15 +65,16 @@ class L2P(nn.Module):
         self.register_buffer('mask', torch.zeros(class_num))
     
     def forward(self, inputs : torch.Tensor, **kwargs) -> torch.Tensor:
-        x = self.backbone.patch_embed(inputs)
 
-        B, N, D = x.size()
+        img = self.backbone.patch_embed(inputs)
+        B, N, D = img.size()
         cls_token = self.backbone.cls_token.expand(B, -1, -1)
-        token_appended = torch.cat((cls_token, x), dim=1)
+        token_appended = torch.cat((cls_token, img), dim=1)
         x = self.backbone.pos_drop(token_appended + self.backbone.pos_embed)
-
+        
         query = self.backbone.blocks(x)
-        query = self.backbone.norm(query)[:, 0].clone()
+        query = self.backbone.norm(query)
+        query = query[:, 0]
 
         if self._unsim_penalty:
             simmilarity, unsimmilarity, prompts, _ = self.prompt(query)
@@ -89,31 +90,42 @@ class L2P(nn.Module):
             self.simmilarity       =   simmilarity.sum()
             if self._unsim_penalty:
                 self.unsimmilarity = unsimmilarity.sum()
-
             
         if self._scale_prompts :
             scale = ((simmilarity - 1).detach() * self.tau).exp()
             prompts = (prompts * scale.unsqueeze(-1).unsqueeze(-1).expand(-1, -1, self.prompt_len, D)).contiguous().view(B, self.selection_size * self.prompt_len, D)
         else :
             prompts = prompts.contiguous().view(B, self.selection_size * self.prompt_len, D)
+
         prompts = prompts + self.backbone.pos_embed[:,0].clone().expand(self.selection_size * self.prompt_len, -1)
 
-        x = self.backbone.pos_drop(token_appended + self.backbone.pos_embed)
-        x = torch.cat((x[:,0].unsqueeze(1), prompts, x[:,1:]), dim=1)
-        # x = torch.cat((prompts, x[:,1:]), dim=1)
+        img = img + self.backbone.pos_embed[:,1:].clone()
+        if self.training:
+            sel = torch.rand((B, N),device=x.device).argsort(dim=1)
+            img = torch.concat((
+                img.gather(1, sel[:, :int(N*0.5)].unsqueeze(-1).expand(-1, -1, D)),
+                img.gather(1, sel[:, int(N*0.5):].unsqueeze(-1).expand(-1, -1, D)))
+                , dim = 0)
+            x = torch.cat((x[:,:1].repeat(2,1,1), prompts.repeat(2,1,1), img), dim=1)
+        else:
+            x = torch.cat((x[:,:1], prompts, img), dim=1)
+
+        x = self.backbone.pos_drop(x)
 
         x = self.backbone.blocks(x)
         x = self.backbone.norm(x)
-
-        x = x[:, 1:self.selection_size * self.prompt_len + 1].clone()
-        # x = x[:, :self.selection_size * self.prompt_len].clone()
-        x = x.mean(dim=1)
-        x = self.backbone.head(x)
-
-        if self._update_per_iter:
-            self.prompt.update()
+        x = x[:, 1:self.selection_size*self.prompt_len+1].clone()
 
         if self.training:
+            self.imgloss = x[:B].clone().transpose(1,2) @ x[B:].clone()
+            self.imgloss = self.imgloss / self.imgloss.max()
+            self.imgloss = -(self.imgloss.diagonal(dim1=1, dim2=2).exp().sum() / self.imgloss.exp().sum()).log()        
+            x = x.mean(dim=1)
+        else:
+            x = x.mean(dim=1)
+        x = self.backbone.head(x)
+        if self.training:
+            x = (x[:B].clone() + x[B:].clone())/2 
             x = x + self.mask
         return x
     
@@ -122,16 +134,19 @@ class L2P(nn.Module):
         if self._unsim_penalty:
             return F.cross_entropy(output, target) + self.lambd * self.simmilarity - self.xi * self.unsimmilarity
         else :
-            return F.cross_entropy(output, target) + self.lambd * self.simmilarity
-
+            if self.training:
+                return F.cross_entropy(output, target) + self.lambd * self.simmilarity + self.xi * self.imgloss
+            else:
+                return F.cross_entropy(output, target) + self.lambd * self.simmilarity
+                
     def convert_train_task(self, task : torch.Tensor, **kwargs):
         self.mask += -torch.inf
         self.mask[task.to(self.mask.device)] = 0
-        return
+        return self.prompt.update()
 
     def get_count(self):
         return self.prompt.update()
-
+        
     def train(self: T, mode: bool = True, **kwargs) -> T:
         ten = super().train(mode)
         self.backbone.eval()

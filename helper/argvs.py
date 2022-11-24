@@ -5,16 +5,17 @@ import torch.nn as nn
 from data.CUB200 import CUB200
 from data.Dataset5 import Dataset5
 from data.TinyImageNet import TinyImageNet
-from models.CertL2P import CertL2P
 from models.CertViT import CertViT
 from models.ContrastiveL2P import ContrastiveL2P
 from models.dualprompt import DualPrompt
 from models.EViT import EViT
 from models.GausskeyL2P import GausskeyL2P
 from models.L2P import L2P
-from models.MidL2P import MidL2P
+from models.DyL2P import DyL2P
 from models.NotL2P import NotL2P
-from models.PrEL2P import PrEL2P
+from models.InViTL2P import InViTL2P
+from models.ViTAutoEncoder import ViTAutoEncoder
+from models.ReplayL2P import ReplayL2P
 from torch.utils.data import Dataset
 from torchvision.datasets import (CIFAR10, CIFAR100, MNIST, FashionMNIST,
                                   ImageNet)
@@ -35,6 +36,7 @@ parser.add_argument("--model"         , type=str, help="model name to train or e
 parser.add_argument("--criterion"     , type=str, help="loss function to use for training",           default="adam")
 parser.add_argument("--optimizer"     , type=str, help="optimizer to use for training",               default="crossentropy")
 parser.add_argument("--scheduler"     , type=str, help="learning Rate Scheduler to use for training", default="const")
+parser.add_argument("--grad-clip"     , type=float, help="gradient clip. 0.0 for disable.", default=1.0)
 
 parser.add_argument("--batch-size"    , type=int, help="batch size of data")
 parser.add_argument("--step-size"     , type=int, help="number of batches for accumulate gradient", default=1)
@@ -68,6 +70,10 @@ parser.add_argument('--local-rank',   default=0, type=int, help='local rank for 
 #  Model Parser for Each Model                                             #
 #                                                                          #
 ############################################################################  
+
+vitautoencoder = argparse.ArgumentParser(description = 'ViT AutoEncoder')
+vitautoencoder.add_argument("--class_num"       , type=int, help="class number of dataset")
+vitautoencoder.add_argument("--backbone_name"   , type=str, help="backbone name of ViT")
 
 # L2P Parser
 l2p = argparse.ArgumentParser(add_help=False)
@@ -103,16 +109,6 @@ dualprompt.add_argument("--pos-e-prompt" , type=int, default = [2], nargs='+')
 dualprompt.add_argument("--len-e-prompt" , type=int)
 dualprompt.add_argument("--lambda"       , type=float, default=1.0)
 dualprompt.add_argument("--prompt-func"  , type=str)
-
-# CertL2P Parser
-certl2p = argparse.ArgumentParser(parents=(l2p,), add_help=False)
-certl2p.add_argument("--selection-layer", type=int,   default = [3,6,9], nargs='+')
-certl2p.add_argument("--reserve-rate",    type=float, default = 0.7)
-
-# EL2P Parser
-prel2p = argparse.ArgumentParser(parents=(l2p,), add_help=False)
-prel2p.add_argument("--selection-layer",  type=int,   default = [3,6,9], nargs='+')
-prel2p.add_argument("--reserve-rate",     type=float, default = 0.7)
 
 # EViT Parser
 evit = argparse.ArgumentParser()
@@ -205,11 +201,12 @@ models = {
     "notl2p"         : (NotL2P, notl2p),
     "evit"           : (EViT, evit),
     "certvit"        : (CertViT, certvit),
-    "certl2p"        : (CertL2P, certl2p),
-    "prel2p"         : (PrEL2P, prel2p),
     "contrastivel2p" : (ContrastiveL2P, l2p),
     "gausskeyl2p"    : (GausskeyL2P, gausskeyl2p),
-    "midl2p"         : (MidL2P, l2p),
+    "invitl2p"       : (InViTL2P, l2p),
+    "dyl2p"          : (DyL2P, l2p),
+    "replayl2p"      : (ReplayL2P, l2p),
+    "vitautoencoder" : (ViTAutoEncoder, vitautoencoder),
 }
 criterions = {
     "crossentropy" : nn.CrossEntropyLoss,

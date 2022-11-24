@@ -3,6 +3,7 @@ import os
 import sys
 import time
 import multiprocessing as mp
+mp.set_start_method("spawn", force=True)
 
 from helper.argvs import parse_args
 from utils.trainer import Imgtrainer
@@ -32,7 +33,7 @@ default_cfgs['vit_base_patch16_224_l2p'] = _cfg(
         num_classes=21843)
 
 os.environ['WANDB_AGENT_MAX_INITIAL_FAILURES'] = '100'
-
+os.environ['WANDB_API_KEY']='248bc1773e3aafd753ce7429527187cbb0dd53cd'
 # Print the dictionary in a nice way
 def dict_print(d : dict, indent = 0) -> None:
     for k, v in d.items():
@@ -50,7 +51,6 @@ def main(args):
     trainer.run()
 
 if __name__ == "__main__":
-    mp.set_start_method('spawn')
     args = vars(parse_args(sys.argv[1:]))
     main(args)
     print("Done")
