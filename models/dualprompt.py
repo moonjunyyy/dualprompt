@@ -27,7 +27,7 @@ class DualPrompt(L2P):
         del(self.selection_size)
         del(self.prompt_len)
 
-        self.register_buffer('tasks', torch.empty((0, 10), dtype=torch.long))
+        self.register_buffer('tasks', torch.zeros((1, 10), dtype=torch.long))
 
         self.register_buffer('pos_g_prompt', torch.tensor(pos_g_prompt, dtype= torch.int64))
         self.register_buffer('pos_e_prompt', torch.tensor(pos_e_prompt, dtype= torch.int64))
@@ -41,13 +41,13 @@ class DualPrompt(L2P):
         
         if prompt_func == 'prompt_tuning':
             self.prompt_func = self.prompt_tuning
-            self.g_prompt = None if len(pos_g_prompt) == 0 else Prompt(g_pool, 1, self.g_length * self.len_g_prompt, self.backbone.num_features, batchwise_selection = True)
-            self.e_prompt = None if len(pos_e_prompt) == 0 else Prompt(e_pool, 1, self.e_length * self.len_e_prompt, self.backbone.num_features, batchwise_selection = True)
+            self.g_prompt = None if len(pos_g_prompt) == 0 else Prompt(g_pool, 1, self.g_length * self.len_g_prompt, self.backbone.num_features, batchwise_selection = False)
+            self.e_prompt = None if len(pos_e_prompt) == 0 else Prompt(e_pool, 1, self.e_length * self.len_e_prompt, self.backbone.num_features, batchwise_selection = False)
 
         elif prompt_func == 'prefix_tuning':
             self.prompt_func = self.prefix_tuning
-            self.g_prompt = None if len(pos_g_prompt) == 0 else Prompt(g_pool, 1, 2 * self.g_length * self.len_g_prompt, self.backbone.num_features, batchwise_selection = True)
-            self.e_prompt = None if len(pos_e_prompt) == 0 else Prompt(e_pool, 1, 2 * self.e_length * self.len_e_prompt, self.backbone.num_features, batchwise_selection = True)
+            self.g_prompt = None if len(pos_g_prompt) == 0 else Prompt(g_pool, 1, 2 * self.g_length * self.len_g_prompt, self.backbone.num_features, batchwise_selection = False)
+            self.e_prompt = None if len(pos_e_prompt) == 0 else Prompt(e_pool, 1, 2 * self.e_length * self.len_e_prompt, self.backbone.num_features, batchwise_selection = False)
 
         else: raise ValueError('Unknown prompt_func: {}'.format(prompt_func))
         
@@ -67,11 +67,11 @@ class DualPrompt(L2P):
         e_prompt = e_prompt + self.backbone.pos_embed[:,0,:].unsqueeze(1).expand(e_prompt.size())
 
         for n, block in enumerate(self.backbone.blocks):
-            pos_g = ((self.pos_g_prompt == n).nonzero()).squeeze()
+            pos_g = ((self.pos_g_prompt.eq(n)).nonzero()).squeeze()
             if pos_g.numel() != 0:
                 x = torch.cat((x, g_prompt[:, pos_g].clone().unsqueeze(0).expand(B,-1,-1)), dim = 1)
 
-            pos_e = ((self.pos_e_prompt == n).nonzero()).squeeze()
+            pos_e = ((self.pos_g_prompt.eq(n)).nonzero()).squeeze()
             if pos_e.numel() != 0:
                 x = torch.cat((x, e_prompt[:, pos_e].clone().unsqueeze(0).expand(B,-1,-1)), dim = 1)
             x = block(x)
@@ -86,8 +86,8 @@ class DualPrompt(L2P):
         B, N, C = x.size()
         g_prompt = g_prompt.view(B, 2 * self.g_length, self.len_g_prompt, C)
         e_prompt = e_prompt.view(B, 2 * self.e_length, self.len_e_prompt, C)
-        g_prompt = g_prompt + self.backbone.pos_embed[:,0,:].unsqueeze(1).expand(g_prompt.size())
-        e_prompt = e_prompt + self.backbone.pos_embed[:,0,:].unsqueeze(1).expand(e_prompt.size())
+        g_prompt = g_prompt + self.backbone.pos_embed[:,0,:].unsqueeze(1).expand(g_prompt.size()).clone()
+        e_prompt = e_prompt + self.backbone.pos_embed[:,0,:].unsqueeze(1).expand(e_prompt.size()).clone()
 
         for n, block in enumerate(self.backbone.blocks):
 
@@ -95,12 +95,12 @@ class DualPrompt(L2P):
             xk = xq.clone()
             xv = xq.clone()
 
-            pos_g = ((self.pos_g_prompt.clone() == n).nonzero()).squeeze()
+            pos_g = ((self.pos_g_prompt.eq(n)).nonzero()).squeeze()
             if pos_g.numel() != 0:
                 xk = torch.cat((xk, g_prompt[:, pos_g * 2 + 0].clone()), dim = 1)
                 xv = torch.cat((xv, g_prompt[:, pos_g * 2 + 1].clone()), dim = 1)
 
-            pos_e = ((self.pos_e_prompt.clone() == n).nonzero()).squeeze()
+            pos_e = ((self.pos_e_prompt.eq(n)).nonzero()).squeeze()
             if pos_e.numel() != 0:
                 xk = torch.cat((xk, e_prompt[:, pos_e * 2 + 0].clone()), dim = 1)
                 xv = torch.cat((xv, e_prompt[:, pos_e * 2 + 1].clone()), dim = 1)
@@ -131,19 +131,20 @@ class DualPrompt(L2P):
 
     def forward(self, inputs : torch.Tensor) :
 
-        x = self.backbone.patch_embed(inputs)
-        B, N, D = x.size()
+        with torch.no_grad():
+            x = self.backbone.patch_embed(inputs)
+            B, N, D = x.size()
 
-        cls_token = self.backbone.cls_token.expand(B, -1, -1)
-        t = torch.cat((cls_token, x), dim=1)
-        x = self.backbone.pos_drop(t + self.backbone.pos_embed)
-        q = self.backbone.blocks(x)
-        q = self.backbone.norm(q)[:, 0, :].clone()
+            cls_token = self.backbone.cls_token.expand(B, -1, -1)
+            t = torch.cat((cls_token, x), dim=1)
+            x = self.backbone.pos_drop(t + self.backbone.pos_embed)
+            q = self.backbone.blocks(x)
+            q = self.backbone.norm(q)[:, 0, :].clone()
 
         g_s, g_p = self.g_prompt(q)
         if self.training:
-            e_s = F.cosine_similarity(q, self.e_prompt.key[self.task_id].clone(), dim = -1)
-            e_p = self.e_prompt.prompts[self.task_id].clone().expand(B, -1, -1)
+            e_s = F.cosine_similarity(q.unsqueeze(1), self.e_prompt.key[self.task_id].clone(), dim = -1)
+            e_p = self.e_prompt.prompts[self.task_id].expand(B, -1, -1).clone()
         else:
             e_s, e_p = self.e_prompt(q)
 
@@ -156,18 +157,24 @@ class DualPrompt(L2P):
 
     def convert_train_task(self, task : torch.Tensor, **kwargs):
         flag = -1
-        for n, t in enumerate(self.tasks):
-            if torch.equal(t, task.clone()):
+        for n, t in enumerate(self.tasks.clone()):
+            if (n==0) : continue
+            if torch.equal(t, task.to(self.tasks.device)):
                 flag = n
                 break
         if flag == -1:
-            self.tasks = torch.cat((self.tasks, task.unsqueeze(0)), dim = 0)
-            self.task_id = len(self.tasks) - 1
+            self.tasks = torch.cat((self.tasks, task.to(self.tasks.device).unsqueeze(0)), dim = 0)
+            self.task_id = self.tasks.size(0) - 2
         else :
-            self.task_id = flag
+            self.task_id = flag - 1
+        # self.task_id = 0
         self.mask += -torch.inf
         self.mask[task] = 0
         return
         
     def get_count(self):
         return self.e_prompt.update()
+
+    def loss_fn(self, output, target):
+        B, C = output.size()
+        return F.cross_entropy(output, target) + self.lambd * self.simmilarity

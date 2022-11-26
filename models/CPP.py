@@ -34,6 +34,9 @@ class CPP(L2P):
         self.prompt_func = self.prefix_tuning
         self.prompt = Prompt(e_pool, 1, 2 * self.e_length * self.len_e_prompt, self.backbone.num_features, batchwise_selection = True)
 
+        self.key_prototypes = nn.Parameter(torch.randn(self.class_num, self.backbone.num_features))
+        self.val_prototypes = nn.Parameter(torch.randn(self.class_num, self.num_centroids, self.backbone.num_features))
+
         self.task_num = task_num
         self.task_id = -1 # if _convert_train_task is not called, task will undefined
     
@@ -123,3 +126,7 @@ class CPP(L2P):
         self.mask[task] = 0
         
         return self.e_prompt.update()
+
+    def loss_fn(self, output, target):
+        
+        return super().loss_fn(output, target)
