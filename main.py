@@ -34,19 +34,10 @@ def vit_base_patch16_224_l2p(pretrained=False, **kwargs):
 
 os.environ['WANDB_AGENT_MAX_INITIAL_FAILURES'] = '100'
 os.environ['WANDB_API_KEY']='248bc1773e3aafd753ce7429527187cbb0dd53cd'
-# Print the dictionary in a nice way
-def dict_print(d : dict, indent = 0) -> None:
-    for k, v in d.items():
-        print('\t' * indent + str(k), end = ' : ')
-        if v is not None and isinstance(v, dict):
-            print('')
-            dict_print(v, indent + 1)
-        else:
-            print(v)
+os.environ['TORCH_DISTRIBUTED_DEBUG'] = 'DETAIL'
 
 # MAIN FUNCTION
 def main(args):
-    #dict_print(args)
     trainer = Imgtrainer(**args)
     trainer.run()
 

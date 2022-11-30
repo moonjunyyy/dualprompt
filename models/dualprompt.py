@@ -27,7 +27,7 @@ class DualPrompt(L2P):
         del(self.selection_size)
         del(self.prompt_len)
 
-        self.register_buffer('tasks', torch.zeros((1, 10), dtype=torch.long))
+        self.tasks = []
 
         self.register_buffer('pos_g_prompt', torch.tensor(pos_g_prompt, dtype= torch.int64))
         self.register_buffer('pos_e_prompt', torch.tensor(pos_e_prompt, dtype= torch.int64))
@@ -61,10 +61,10 @@ class DualPrompt(L2P):
                       **kwargs):
 
         B, _, D = x.size()
-        g_prompt = g_prompt.view(B, self.g_length, self.len_g_prompt, D)
-        e_prompt = e_prompt.view(B, self.e_length, self.len_e_prompt, D)
-        g_prompt = g_prompt + self.backbone.pos_embed[:,0,:].unsqueeze(1).expand(g_prompt.size())
-        e_prompt = e_prompt + self.backbone.pos_embed[:,0,:].unsqueeze(1).expand(e_prompt.size())
+        g_prompt = g_prompt.view(B, self.g_length, self.len_g_prompt, D).clone()
+        e_prompt = e_prompt.view(B, self.e_length, self.len_e_prompt, D).clone()
+        g_prompt = g_prompt + self.backbone.pos_embed[:,0,:].unsqueeze(1).expand(g_prompt.size()).clone()
+        e_prompt = e_prompt + self.backbone.pos_embed[:,0,:].unsqueeze(1).expand(e_prompt.size()).clone()
 
         for n, block in enumerate(self.backbone.blocks):
             pos_g = ((self.pos_g_prompt.eq(n)).nonzero()).squeeze()
@@ -84,10 +84,10 @@ class DualPrompt(L2P):
                       **kwargs):
 
         B, N, C = x.size()
-        g_prompt = g_prompt.view(B, 2 * self.g_length, self.len_g_prompt, C)
-        e_prompt = e_prompt.view(B, 2 * self.e_length, self.len_e_prompt, C)
-        g_prompt = g_prompt + self.backbone.pos_embed[:,0,:].unsqueeze(1).expand(g_prompt.size()).clone()
-        e_prompt = e_prompt + self.backbone.pos_embed[:,0,:].unsqueeze(1).expand(e_prompt.size()).clone()
+        g_prompt = g_prompt.clone().view(B, 2 * self.g_length, self.len_g_prompt, C)
+        e_prompt = e_prompt.clone().view(B, 2 * self.e_length, self.len_e_prompt, C)
+        g_prompt = g_prompt + self.backbone.pos_embed[:,0,:].unsqueeze(1).expand(g_prompt.size())
+        e_prompt = e_prompt + self.backbone.pos_embed[:,0,:].unsqueeze(1).expand(e_prompt.size())
 
         for n, block in enumerate(self.backbone.blocks):
 
@@ -136,19 +136,19 @@ class DualPrompt(L2P):
             B, N, D = x.size()
 
             cls_token = self.backbone.cls_token.expand(B, -1, -1)
-            t = torch.cat((cls_token, x), dim=1)
-            x = self.backbone.pos_drop(t + self.backbone.pos_embed)
-            q = self.backbone.blocks(x)
-            q = self.backbone.norm(q)[:, 0, :].clone()
+            token_appended = torch.cat((cls_token, x), dim=1)
+            x = self.backbone.pos_drop(token_appended + self.backbone.pos_embed)
+            query = self.backbone.blocks(x)
+            query = self.backbone.norm(query)[:, 0].clone()
 
-        g_s, g_p = self.g_prompt(q)
+        g_s, g_p = self.g_prompt(query)
         if self.training:
-            e_s = F.cosine_similarity(q.unsqueeze(1), self.e_prompt.key[self.task_id].clone(), dim = -1)
+            e_s = F.cosine_similarity(query.unsqueeze(1), self.e_prompt.key[self.task_id].clone(), dim = -1)
             e_p = self.e_prompt.prompts[self.task_id].expand(B, -1, -1).clone()
         else:
-            e_s, e_p = self.e_prompt(q)
+            e_s, e_p = self.e_prompt(query.clone())
 
-        x = self.prompt_func(t + self.backbone.pos_embed, g_p.clone(), e_p.clone())
+        #x = self.prompt_func(token_appended + self.backbone.pos_embed, g_p.clone(), e_p.clone())
         x = self.backbone.norm(x)
         x = self.backbone.head(x[:, 0].clone())
 
@@ -157,16 +157,15 @@ class DualPrompt(L2P):
 
     def convert_train_task(self, task : torch.Tensor, **kwargs):
         flag = -1
-        for n, t in enumerate(self.tasks.clone()):
-            if (n==0) : continue
-            if torch.equal(t, task.to(self.tasks.device)):
+        for n, t in enumerate(self.tasks):
+            if torch.equal(t, task):
                 flag = n
                 break
         if flag == -1:
-            self.tasks = torch.cat((self.tasks, task.to(self.tasks.device).unsqueeze(0)), dim = 0)
-            self.task_id = self.tasks.size(0) - 2
+            self.tasks.append(task)
+            self.task_id = len(self.tasks) - 1
         else :
-            self.task_id = flag - 1
+            self.task_id = flag
         # self.task_id = 0
         self.mask += -torch.inf
         self.mask[task] = 0

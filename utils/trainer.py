@@ -12,6 +12,8 @@ import torch.multiprocessing as mp
 import torchvision.transforms as transforms
 import wandb
 from data.Dataset5 import Dataset5
+from data.Dataset3 import Dataset3
+from models.CPP import CPP
 from helper.argvs import (get_criterion, get_dataset, get_model, get_optimizer,
                           get_scheduler)
 from helper.metric import AverageMeter, ProgressMeter, Summary, accuracy
@@ -100,7 +102,7 @@ class Imgtrainer():
         #TODO : Transform needs to be diversed and be selected by user
         self.train_transform = transforms.Compose([transforms.Resize((224, 224)), transforms.ToTensor ()])
         self.var_transform   = transforms.Compose([transforms.Resize((224, 224)), transforms.ToTensor ()])
-        self.random_class = not self.dataset == Dataset5
+        self.random_class = not (self.dataset == Dataset5 or self.dataset == Dataset3)
 
         if self.dataset==ImageNet:
             #TODO : Transform needs to be diversed and be selected by user
@@ -181,12 +183,19 @@ class Imgtrainer():
 
         if self.training:
             if self.task_governor == "CIL":
+                if issubclass(self.model_base, CPP):
+                    self.CPP_Train()
+                    return
                 self.CIL_Train()
             else:
                 self.Single_Task_Train()
         else:
             if self.task_governor == "CIL":
+                if issubclass(self.model_base, CPP):
+                    self.CPP_Eval()
+                    return
                 self.CIL_Eval()
+                
             else:
                 self.Single_Task_Eval()
 
@@ -222,6 +231,39 @@ class Imgtrainer():
         print(f"Learnable Parameters :\t{n_params}")
         print("")
 
+    def CPP_Train(self):
+        self.setup_dataset_for_distributed()
+        accuracy_matrix = torch.zeros((self.num_tasks, self.num_tasks))
+
+        for self.task in range(self.num_tasks):     
+            loader_train = self.set_task(self.dataset_train, self.sampler_train, self.task)
+            self.model_without_ddp.convert_train_task(self.sampler_train.get_task())
+            print(f"Training for task {self.task} : {self.sampler_train.get_task().tolist()}")
+            
+            self.model_without_ddp.pre_forward(loader_train)
+            for self.epoch in range(self.epochs):
+                self.sampler_train.set_epoch(self.epoch)
+                self.train(loader_train, self.model, self.criterion, self.optimizer)
+                self.scheduler.step()
+                print('')
+            self.model_without_ddp.post_forward(loader_train)
+
+            print("Selection : ",(self.model_without_ddp.get_count().to(torch.int)).tolist(), end='\n\n')
+            for self.test in range(self.task + 1):
+                loader_val = self.set_task(self.dataset_val, self.sampler_val, self.test) 
+                accuracy_matrix[self.task, self.test] = self.validate(loader_val, self.model, self.criterion)
+                print("Selection : ",(self.model_without_ddp.get_count().to(torch.int)).tolist())
+            self.epoch = 0
+            self.optimizer = self.optimizer_base(self.model.parameters(), **self.optimizer_args)
+            print('')
+
+        print(f"Accuracy Matrix :\n{accuracy_matrix.numpy()} \n Average Accuracy : {accuracy_matrix[-1,:].mean().item()}")
+        forgetting = accuracy_matrix.max(dim=0)[0] - accuracy_matrix[-1, :]
+        print(f"Forgetting : {forgetting.numpy()} \n Average Forgetting : {forgetting.mean().item()}")
+        if self.is_main_process():
+            wandb.log({'Average_Accuracy' : accuracy_matrix[-1,:].mean().item(),'Average_Forgetting' : forgetting.mean().item()})
+        self.save(self.model_without_ddp, self.optimizer, self.scheduler, self.epoch)
+
     def CIL_Train(self):
         self.setup_dataset_for_distributed()
         ViT_Features = [torch.empty((0, self.model_without_ddp.backbone.num_features), device=self.device) for i in range(self.num_tasks)]
@@ -230,7 +272,6 @@ class Imgtrainer():
             loader_train = self.set_task(self.dataset_train, self.sampler_train, self.task)
             self.model_without_ddp.convert_train_task(self.sampler_train.get_task())
             print(f"Training for task {self.task} : {self.sampler_train.get_task().tolist()}")
-
             # Features for Tsne plot 
             for i, (data, target) in enumerate(loader_train):
                 data = data.to(self.device)

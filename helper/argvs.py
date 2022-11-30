@@ -4,6 +4,7 @@ import torch
 import torch.nn as nn
 from data.CUB200 import CUB200
 from data.Dataset5 import Dataset5
+from data.Dataset3 import Dataset3
 from data.TinyImageNet import TinyImageNet
 from models.CertViT import CertViT
 from models.ContrastiveL2P import ContrastiveL2P
@@ -16,6 +17,7 @@ from models.NotL2P import NotL2P
 from models.InViTL2P import InViTL2P
 from models.ViTAutoEncoder import ViTAutoEncoder
 from models.ReplayL2P import ReplayL2P
+from models.CPP import CPP
 from torch.utils.data import Dataset
 from torchvision.datasets import (CIFAR10, CIFAR100, MNIST, FashionMNIST,
                                   ImageNet)
@@ -91,6 +93,15 @@ l2p.add_argument("--_unsim_penalty"       , default=True,  action= argparse.Bool
 l2p.add_argument("--_scale_prompts"       , default=True,  action= argparse.BooleanOptionalAction)
 l2p.add_argument("--_scale_simmilarity"   , default=True,  action= argparse.BooleanOptionalAction)
 l2p.add_argument("--_update_per_iter"     , default=False, action= argparse.BooleanOptionalAction)
+
+# CPP Parser
+cpp = argparse.ArgumentParser(add_help=False)
+cpp.add_argument("--backbone-name", type=str)
+cpp.add_argument("--num-neighbors", type=int,   default=20)
+cpp.add_argument("--num-centroids", type=int,   default=5)
+cpp.add_argument("--len-prompt",    type=int,   default=8)
+cpp.add_argument("--num-tasks",     type=int,   default=10)
+cpp.add_argument("--class-num",     type=int,   default=100)
 
 # NotL2P Parser
 notl2p = argparse.ArgumentParser(parents=(l2p,), add_help=False)
@@ -207,6 +218,7 @@ models = {
     "dyl2p"          : (DyL2P, l2p),
     "replayl2p"      : (ReplayL2P, l2p),
     "vitautoencoder" : (ViTAutoEncoder, vitautoencoder),
+    "cpp" : (CPP, cpp),
 }
 criterions = {
     "crossentropy" : nn.CrossEntropyLoss,
@@ -237,6 +249,7 @@ data = {
     "ImageNet"     : (ImageNet,     1000),
     "TinyImageNet" : (TinyImageNet, 200),
     "5datasets"    : (Dataset5,     50),
+    "3datasets"    : (Dataset3,     498),
 }
 
 def model_parser(model_name : str, args : list):
