@@ -11,7 +11,6 @@ class Prompt(nn.Module):
                  dimention            : int,
                  _diversed_selection  : bool = True,
                  _batchwise_selection : bool = True,
-                 _get_unsimmilarity   : bool = False,
                  **kwargs) -> None:
         super().__init__()
 
@@ -21,7 +20,6 @@ class Prompt(nn.Module):
         self.dimention      = dimention
         self._diversed_selection  = _diversed_selection
         self._batchwise_selection = _batchwise_selection
-        self._get_unsimmilarity   = _get_unsimmilarity
 
         self.key     = nn.Parameter(torch.randn(pool_size, dimention, requires_grad= True))
         self.prompts = nn.Parameter(torch.randn(pool_size, prompt_len, dimention, requires_grad= True))
@@ -42,6 +40,7 @@ class Prompt(nn.Module):
 
         # Select prompts
         match = 1 - F.cosine_similarity(query.unsqueeze(1), self.key, dim=-1)
+        
         if self.training and self._diversed_selection:
             topk = match * F.normalize(self.frequency, p=1, dim=-1)
         else:
@@ -63,16 +62,7 @@ class Prompt(nn.Module):
         simmilarity   = match.gather(1, topk)
 
         # get unsimilar prompts also 
-        if self._get_unsimmilarity:
-            nonk = torch.ones((B, self.pool_size), device=self.prompts.device, dtype=torch.long)
-            nonk = nonk.scatter(1, topk, torch.zeros_like(nonk))
-            nonk = nonk.nonzero(as_tuple=True)[1].reshape(topk.size())
-            self.nonk = nonk
-            unsimmilarity = match.gather(1, nonk)
-            nonselection  = self.prompts.repeat(B, 1, 1, 1).gather(1, nonk.unsqueeze(-1).unsqueeze(-1).expand(-1, -1, self.prompt_len, self.dimention).clone())
-            return simmilarity, unsimmilarity, selection, nonselection
-        else :
-            return simmilarity, selection
+        return simmilarity, selection
     
     def update(self):
         if self.training:
