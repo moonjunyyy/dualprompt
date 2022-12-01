@@ -1,9 +1,9 @@
-from CPP import CPP
-from EViT import EViT
-from GausskeyL2P import GausskeyL2P
-from L2P import L2P
-from NotL2P import NotL2P
-from dualprompt import DualPrompt
+from .L2P import L2P
+from .EViT import EViT
+from .GausskeyL2P import GausskeyL2P
+from .NotL2P import NotL2P
+from .dualprompt import DualPrompt
+from .CPP import CPP
 
 __all__ = [
     "CPP",

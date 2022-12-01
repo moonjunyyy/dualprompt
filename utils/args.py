@@ -3,7 +3,6 @@ import argparse
 from typing import Iterable
 import torch
 import torch.nn as nn
-from models.CPP import CPP
 from torch.utils.data import Dataset
 from torchvision.datasets import (CIFAR10, CIFAR100, MNIST, FashionMNIST,
                                   ImageNet)
@@ -38,7 +37,6 @@ parser.add_argument("--num-tasks"     , type=int, default=1,help="task numbers")
 
 parser.add_argument("--num-workers"   , type=int, default=2,help="task workers")
 parser.add_argument("--dataset"       , type=str, help="dataset or datasets to train or evaluate", nargs='+', default=["CIFAR10"])
-parser.add_argument("--argumentation" , type=str, help="AutoAgmentation policy to use for training.", default="none")
 parser.add_argument("--dataset-path"  , type=str, default="/home/datasets/", help="path of dataset")
 parser.add_argument("--save-path"     , type=str, default="saved/model/", help="path to save model")
 
@@ -261,7 +259,7 @@ def scheduler_parser(scheduler_name : str, args : list):
     except KeyError:
         raise ValueError("unknown scheduler name {}".format(scheduler_name))
 
-def dataset(args, _data : str) -> Dataset:
+def dataset(args, _data : Iterable[str]) -> Iterable[str]:
     classes = 0
     for data_name in _data:
         try:
@@ -269,6 +267,7 @@ def dataset(args, _data : str) -> Dataset:
         except KeyError:
             raise ValueError("unknown dataset name {}".format(data_name))
     args.model_args["class_num"] = classes
+    return _data
 
 def get_model(model_name : str):
     try:
@@ -302,6 +301,7 @@ def get_dataset(dataset_name : Iterable[str]):
             classnum = data[data_name][1]
         except KeyError:
             raise ValueError("unknown dataset name {}".format(data_name))
+    return datasets
 
 def parse_args(args : list):
     parse    = parser.parse_known_args(args)

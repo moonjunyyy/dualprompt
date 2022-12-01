@@ -110,8 +110,8 @@ class Imgtrainer():
             self.dataset_val     = self.dataset(self.dataset_path, split = 'val',    transform=self.var_transform)
         else:
             if len(self.dataset) == 1:
-                self.dataset_train   = self.dataset(self.dataset_path, download=True, train=True,  transform=self.train_transform)
-                self.dataset_val     = self.dataset(self.dataset_path, download=True, train=False, transform=self.var_transform)
+                self.dataset_train   = self.dataset[0](self.dataset_path, download=True, train=True,  transform=self.train_transform)
+                self.dataset_val     = self.dataset[0](self.dataset_path, download=True, train=False, transform=self.var_transform)
             else:
                 self.dataset_train   = multiDatasets(self.dataset, self.dataset_path, download=True, train=True,  transform=self.train_transform, task=0)
                 self.dataset_val     = multiDatasets(self.dataset, self.dataset_path, download=True, train=False, transform=self.var_transform,   task=0)
