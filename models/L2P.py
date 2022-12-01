@@ -30,9 +30,7 @@ class L2P(nn.Module):
 
         self.prompt_len     = prompt_len
         self.selection_size = selection_size
-        self.lambd = lambd
-        self.tau   = tau
-        self.xi    = xi
+        self.lambd          = lambd
         self._batchwise_selection = _batchwise_selection
         self._update_per_iter     = _update_per_iter
         self.class_num            = class_num

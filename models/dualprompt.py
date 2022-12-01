@@ -7,7 +7,6 @@ from models.L2P import L2P
 
 class DualPrompt(L2P):
     def __init__(self,
-                 dimention      : int   = None,
                  pos_g_prompt   : tuple = (),
                  len_g_prompt   : int   = 5,
                  pos_e_prompt   : tuple = (),
@@ -19,8 +18,7 @@ class DualPrompt(L2P):
                  backbone_name  : str   = None,
                  **kwargs):
 
-        super().__init__(dimention= dimention,
-                         class_num= class_num,
+        super().__init__(class_num= class_num,
                          lambd= lambd,
                          backbone_name= backbone_name,**kwargs)
         del(self.prompt)
