@@ -4,6 +4,7 @@ from typing import Callable, Optional
 
 from torch.utils.data import Dataset
 from torchvision.datasets import MNIST
+from torchvision.transforms import transforms
 
 class MNIST(Dataset):
     def __init__(
@@ -16,7 +17,7 @@ class MNIST(Dataset):
     ) -> None:
 
         super().__init__()
-        self.dataset = MNIST(root, train, transform, target_transform, download)
+        self.dataset = MNIST(root, train, transforms.ToTensor() if transform is None else transform, target_transform, download)
         
         self.classes = [str(i) for i in range(10)]
         self.targets = []

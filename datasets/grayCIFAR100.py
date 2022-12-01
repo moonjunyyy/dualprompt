@@ -4,6 +4,7 @@ from typing import Callable, Optional
 
 from torch.utils.data import Dataset
 from torchvision.datasets import CIFAR100
+from torchvision.transforms import transforms
 
 class grayCIFAR100(Dataset):
     def __init__(
@@ -16,11 +17,11 @@ class grayCIFAR100(Dataset):
     ) -> None:
 
         super().__init__()
-        self.dataset = CIFAR100(root, train, transform, target_transform, download)
+        self.dataset = CIFAR100(root, train, transforms.ToTensor() if transform is None else transform, target_transform, download)
         
         self.classes = [str(i) for i in range(10)]
         self.targets = []
-        for cls in self.dataset.labels:
+        for cls in self.dataset.targets:
             self.targets.append(int(cls))
 
     def __getitem__(self, index):

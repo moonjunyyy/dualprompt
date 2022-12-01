@@ -4,6 +4,7 @@ from typing import Callable, Optional
 
 from torch.utils.data import Dataset
 from torchvision.datasets import SVHN
+from torchvision.transforms import ToTensor
 
 class graySVHN(Dataset):
     def __init__(
@@ -16,7 +17,7 @@ class graySVHN(Dataset):
     ) -> None:
 
         super().__init__()
-        self.dataset = SVHN(root, "train" if train else "test", transform, target_transform, download)
+        self.dataset = SVHN(root, "train" if train else "test", transforms.ToTensor() if transform is None else transform, target_transform, download)
         
         self.classes = [str(i) for i in range(10)]
         self.targets = []
