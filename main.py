@@ -5,7 +5,7 @@ import time
 import multiprocessing as mp
 mp.set_start_method("spawn", force=True)
 
-from helper.argvs import parse_args
+from helper.args import parse_args
 from utils.trainer import Imgtrainer
 
 import timm

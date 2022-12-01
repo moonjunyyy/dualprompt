@@ -8,7 +8,7 @@ import multiprocessing as mp
 from timm.models.registry import register_model
 from timm.models.vision_transformer import _cfg, _create_vision_transformer, default_cfgs
 
-from helper.argvs import parse_args
+from helper.args import parse_args
 from utils.trainer import Imgtrainer
 
 os.environ["TORCH_DISTRIBUTED_DEBUG"]="DETAIL"

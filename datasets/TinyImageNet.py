@@ -6,9 +6,6 @@ from torch.utils.data import Dataset, random_split
 from torchvision.datasets import ImageFolder, ImageNet
 import torchvision.transforms as transforms
 
-from data._DatasetCopy import _DatasetCopy
-
-
 class TinyImageNet(ImageFolder):
     def __init__(self, 
                  root             : str, 

@@ -11,19 +11,18 @@ import torch.distributed as dist
 import torch.multiprocessing as mp
 import torchvision.transforms as transforms
 import wandb
-from data.Dataset5 import Dataset5
-from data.Dataset3 import Dataset3
 from models.CPP import CPP
-from helper.argvs import (get_criterion, get_dataset, get_model, get_optimizer,
+from utils.args import (get_criterion, get_dataset, get_model, get_optimizer,
                           get_scheduler)
-from helper.metric import AverageMeter, ProgressMeter, Summary, accuracy
+from utils.metric import AverageMeter, ProgressMeter, Summary, accuracy
 from models.GausskeyL2P import GausskeyL2P
-from sweep.sweep import sweep_config
+import json
 from torch.utils.data import DataLoader
-from torchvision.datasets import ImageFolder, ImageNet
+from torchvision.datasets import ImageNet
+from datasets import multiDatasets
 from sklearn.manifold import TSNE
 
-from utils.sampler import CILSampler
+from utils.sampler import CILSampler, multiDatasetSampler
 
 ########################################################################################################################
 # This is trainer with a DistributedDataParallel                                                                       #
@@ -102,7 +101,6 @@ class Imgtrainer():
         #TODO : Transform needs to be diversed and be selected by user
         self.train_transform = transforms.Compose([transforms.Resize((224, 224)), transforms.ToTensor ()])
         self.var_transform   = transforms.Compose([transforms.Resize((224, 224)), transforms.ToTensor ()])
-        self.random_class = not (self.dataset == Dataset5 or self.dataset == Dataset3)
 
         if self.dataset==ImageNet:
             #TODO : Transform needs to be diversed and be selected by user
@@ -111,11 +109,16 @@ class Imgtrainer():
             self.dataset_train   = self.dataset(self.dataset_path, split = 'train',  transform=self.train_transform)
             self.dataset_val     = self.dataset(self.dataset_path, split = 'val',    transform=self.var_transform)
         else:
-            self.dataset_train   = self.dataset(self.dataset_path, download=True, train=True,  transform=self.train_transform)
-            self.dataset_val     = self.dataset(self.dataset_path, download=True, train=False, transform=self.var_transform)
+            if len(self.dataset) == 1:
+                self.dataset_train   = self.dataset(self.dataset_path, download=True, train=True,  transform=self.train_transform)
+                self.dataset_val     = self.dataset(self.dataset_path, download=True, train=False, transform=self.var_transform)
+            else:
+                self.dataset_train   = multiDatasets(self.dataset, self.dataset_path, download=True, train=True,  transform=self.train_transform, task=0)
+                self.dataset_val     = multiDatasets(self.dataset, self.dataset_path, download=True, train=False, transform=self.var_transform,   task=0)
 
     def run(self):
         if self.sweep:
+            sweep_config = json.loads("sweep.json")
             sweep_id = wandb.sweep(sweep_config, project=self.project, entity=self.entity)
             wandb.agent(sweep_id, function=self.process_devider, project=self.project, entity=self.entity, count=100)
         else:
@@ -205,9 +208,14 @@ class Imgtrainer():
     def setup_dataset_for_distributed(self):
         _r = dist.get_rank() if self.distributed else None       # means that it is not distributed
         _w = dist.get_world_size() if self.distributed else None # means that it is not distributed
-    
-        self.sampler_train = CILSampler(self.dataset_train, self.num_tasks, _w, _r, shuffle=True,  shuffle_class=self.random_class, seed=self.seed)
-        self.sampler_val   = CILSampler(self.dataset_val  , self.num_tasks, _w, _r, shuffle=False, shuffle_class=self.random_class, seed=self.seed)
+
+        if len(self.dataset)  == 1:
+            self.sampler_train = CILSampler(self.dataset_train, self.num_tasks, _w, _r, shuffle=True,  shuffle_class=self.random_class, seed=self.seed)
+            self.sampler_val   = CILSampler(self.dataset_val  , self.num_tasks, _w, _r, shuffle=False, shuffle_class=self.random_class, seed=self.seed)
+        else:
+            self.sampler_train = multiDatasetSampler(self.dataset_train, self.num_tasks, _w, _r, shuffle=True,  shuffle_class=self.random_class, seed=self.seed)
+            self.sampler_val   = multiDatasetSampler(self.dataset_val  , self.num_tasks, _w, _r, shuffle=False, shuffle_class=self.random_class, seed=self.seed)
+        
         self.batch_size = int(self.batch_size // self.world_size)
 
         print("Building model...")

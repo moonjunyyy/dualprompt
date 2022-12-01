@@ -1,26 +1,14 @@
 import argparse
 
+from typing import Iterable
 import torch
 import torch.nn as nn
-from data.CUB200 import CUB200
-from data.Dataset5 import Dataset5
-from data.Dataset3 import Dataset3
-from data.TinyImageNet import TinyImageNet
-from models.CertViT import CertViT
-from models.ContrastiveL2P import ContrastiveL2P
-from models.dualprompt import DualPrompt
-from models.EViT import EViT
-from models.GausskeyL2P import GausskeyL2P
-from models.L2P import L2P
-from models.DyL2P import DyL2P
-from models.NotL2P import NotL2P
-from models.InViTL2P import InViTL2P
-from models.ViTAutoEncoder import ViTAutoEncoder
-from models.ReplayL2P import ReplayL2P
 from models.CPP import CPP
 from torch.utils.data import Dataset
 from torchvision.datasets import (CIFAR10, CIFAR100, MNIST, FashionMNIST,
                                   ImageNet)
+from models import *
+from datasets import *
 
 ############################################################################
 #                                                                          #
@@ -49,13 +37,15 @@ parser.add_argument("--task-governor" , type=str, default=None, help="setting of
 parser.add_argument("--num-tasks"     , type=int, default=1,help="task numbers")
 
 parser.add_argument("--num-workers"   , type=int, default=2,help="task workers")
-parser.add_argument("--dataset"       , type=str, help="number of print for a epoch")
+parser.add_argument("--dataset"       , type=str, help="dataset or datasets to train or evaluate", nargs='+', default=["CIFAR10"])
+parser.add_argument("--argumentation" , type=str, help="AutoAgmentation policy to use for training.", default="none")
 parser.add_argument("--dataset-path"  , type=str, default="/home/datasets/", help="path of dataset")
 parser.add_argument("--save-path"     , type=str, default="saved/model/", help="path to save model")
 
 parser.add_argument("--eval"    , default=False, action="store_true", help="perform reproduction not training if True")
 parser.add_argument("--seed"    , type=int, default=None, help="manually set random seed")
 parser.add_argument("--device"  , type=str, default='cuda', help="device to use for training/testing")
+
 parser.add_argument("--pin-mem" , default=False, action= argparse.BooleanOptionalAction, help="use pin memory for data loader")
 parser.add_argument("--use-amp" , default=False, action= argparse.BooleanOptionalAction, help="use amp for fp16")
 parser.add_argument("--use-tf"  , default=False, action= argparse.BooleanOptionalAction, help="use tensorboard")
@@ -211,15 +201,10 @@ models = {
     "l2p"            : (L2P, l2p),
     "notl2p"         : (NotL2P, notl2p),
     "evit"           : (EViT, evit),
-    "certvit"        : (CertViT, certvit),
-    "contrastivel2p" : (ContrastiveL2P, l2p),
     "gausskeyl2p"    : (GausskeyL2P, gausskeyl2p),
-    "invitl2p"       : (InViTL2P, l2p),
-    "dyl2p"          : (DyL2P, l2p),
-    "replayl2p"      : (ReplayL2P, l2p),
-    "vitautoencoder" : (ViTAutoEncoder, vitautoencoder),
-    "cpp" : (CPP, cpp),
+    "cpp"            : (CPP, cpp),
 }
+
 criterions = {
     "crossentropy" : nn.CrossEntropyLoss,
     "bce"          : nn.BCEWithLogitsLoss,
@@ -248,8 +233,14 @@ data = {
     "CUB200"       : (CUB200,       200),
     "ImageNet"     : (ImageNet,     1000),
     "TinyImageNet" : (TinyImageNet, 200),
-    "5datasets"    : (Dataset5,     50),
-    "3datasets"    : (Dataset3,     498),
+    "SVHN"         : (SVHN,         10),
+    "graySVHN"     : (graySVHN,     10),
+    "grayTinyImageNet" : (grayTinyImageNet, 200),
+    "grayFlowers102"   : (grayFlowers102,   102),
+    "graySVHN"         : (graySVHN,         10),
+    "grayCIFAR10"      : (grayCIFAR10,      10),
+    "grayCIFAR100"     : (grayCIFAR100,     100),
+    "grayCUB200"       : (grayCUB200,       200),
 }
 
 def model_parser(model_name : str, args : list):
@@ -277,11 +268,13 @@ def scheduler_parser(scheduler_name : str, args : list):
         raise ValueError("unknown scheduler name {}".format(scheduler_name))
 
 def dataset(args, _data : str) -> Dataset:
-    try:
-        args.model_args["class_num"] = data[_data][1]
-        return _data
-    except KeyError:
-        raise ValueError("unknown dataset name {}".format(_data))
+    classes = 0
+    for data_name in _data:
+        try:
+            classes += data[data_name][1]
+        except KeyError:
+            raise ValueError("unknown dataset name {}".format(data_name))
+    args.model_args["class_num"] = classes
 
 def get_model(model_name : str):
     try:
@@ -307,11 +300,14 @@ def get_scheduler(scheduler_name : str):
     except KeyError:
         raise ValueError("unknown scheduler name {}".format(scheduler_name))
 
-def get_dataset(dataset_name : str):
-    try:
-        return data[dataset_name][0]
-    except KeyError:
-        raise ValueError("unknown dataset name {}".format(dataset_name))
+def get_dataset(dataset_name : Iterable[str]):
+    datasets = []
+    for data_name in dataset_name:
+        try:
+            datasets.append(data[data_name][0])
+            classnum = data[data_name][1]
+        except KeyError:
+            raise ValueError("unknown dataset name {}".format(data_name))
 
 def parse_args(args : list):
     parse    = parser.parse_known_args(args)

@@ -3,12 +3,10 @@ from typing import Callable, Optional
 import torch
 from torch.utils.data import Dataset, random_split
 from torchvision.datasets import ImageFolder
-import torchvision.transforms as transforms
-
-from data._DatasetCopy import _DatasetCopy
 
 
-class CUB200(Dataset):
+
+class grayCUB200(Dataset):
     def __init__(self, 
                  root             : str, 
                  train            : bool, 
@@ -29,7 +27,8 @@ class CUB200(Dataset):
         pass
     
     def __getitem__(self, index):
-        return self.dataset.__getitem__(index)
+        image, label = self.dataset.__getitem__(index)
+        return image.mean(dim=0, keepdim=True).expand(3,-1,-1), label
 
     def __len__(self):
         return len(self.dataset)

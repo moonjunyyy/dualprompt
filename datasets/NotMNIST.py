@@ -3,10 +3,6 @@ from typing import Callable, Optional
 import torch
 from torch.utils.data import Dataset, random_split
 from torchvision.datasets import ImageFolder
-import torchvision.transforms as transforms
-
-from data._DatasetCopy import _DatasetCopy
-
 
 class NotMNIST(Dataset):
     def __init__(self, 
@@ -29,7 +25,8 @@ class NotMNIST(Dataset):
         pass
     
     def __getitem__(self, index):
-        return self.dataset.__getitem__(index)
+        image, label = self.dataset.__getitem__(index)
+        return image.expand(3,-1,-1), label
 
     def __len__(self):
         return len(self.dataset)
