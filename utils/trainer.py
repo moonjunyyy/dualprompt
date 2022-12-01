@@ -210,11 +210,11 @@ class Imgtrainer():
         _w = dist.get_world_size() if self.distributed else None # means that it is not distributed
 
         if len(self.dataset)  == 1:
-            self.sampler_train = CILSampler(self.dataset_train, self.num_tasks, _w, _r, shuffle=True,  shuffle_class=self.random_class, seed=self.seed)
-            self.sampler_val   = CILSampler(self.dataset_val  , self.num_tasks, _w, _r, shuffle=False, shuffle_class=self.random_class, seed=self.seed)
+            self.sampler_train = CILSampler(self.dataset_train, self.num_tasks, _w, _r, shuffle=True, seed=self.seed)
+            self.sampler_val   = CILSampler(self.dataset_val  , self.num_tasks, _w, _r, shuffle=False, seed=self.seed)
         else:
-            self.sampler_train = multiDatasetSampler(self.dataset_train, self.num_tasks, _w, _r, shuffle=True,  shuffle_class=self.random_class, seed=self.seed)
-            self.sampler_val   = multiDatasetSampler(self.dataset_val  , self.num_tasks, _w, _r, shuffle=False, shuffle_class=self.random_class, seed=self.seed)
+            self.sampler_train = multiDatasetSampler(self.dataset_train, self.num_tasks, _w, _r, shuffle=True, seed=self.seed)
+            self.sampler_val   = multiDatasetSampler(self.dataset_val  , self.num_tasks, _w, _r, shuffle=False, seed=self.seed)
         
         self.batch_size = int(self.batch_size // self.world_size)
 

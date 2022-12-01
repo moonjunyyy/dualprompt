@@ -30,8 +30,6 @@ class Prompt(nn.Module):
         self.register_buffer('frequency', torch.ones (pool_size))
         self.register_buffer('counter',   torch.zeros(pool_size))
         self.register_buffer('topk', torch.zeros(1))
-        if self._get_unsimmilarity:
-            self.register_buffer('nonk', torch.zeros(1))
     
     def forward(self, query : torch.Tensor, **kwargs) -> torch.Tensor:
 

@@ -88,12 +88,10 @@ class CPP(L2P):
             prompt = self.prompt[y].clone()
             x = self.backbone.patch_embed(x)
             B, N, C = x.size()
-        
-            x = torch.cat((self.embedding(x[:int(B/4)],          prompt[:int(B/4)]),
-                           self.embedding(x[int(B/4):int(B/2)],  prompt[int(B/4):int(B/2)]),
-                           self.embedding(x[int(B/2):-int(B/4)], prompt[int(B/2):-int(B/4)]),
-                           self.embedding(x[-int(B/4):],         prompt[-int(B/4):])), dim = 0)
-            
+
+            emb = torch.empty((0, self.backbone.num_features), device=self.prompt.device)
+            for i in range(B):
+                emb = torch.cat((emb, self.embedding(x[i:i+1].unsqueeze(0), prompt[i:i+1])), dim = 0)
             embedding_buffer = torch.cat((embedding_buffer, x), dim = 0)
             class_buffer     = torch.cat((class_buffer, y), dim = 0)
 
