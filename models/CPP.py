@@ -34,14 +34,14 @@ class CPP(L2P):
         self.prompt_number = len(self.backbone.blocks)
                 
         self.key_prototypes = nn.Parameter(torch.randn(self.class_num, self.num_centroids, self.backbone.num_features), requires_grad=False)
-        self.prompt         = nn.Parameter(torch.randn(self.class_num, self.prompt_number, 2, self.len_prompt, self.backbone.num_features))
+        self.prompt         = nn.Parameter(torch.randn(self.class_num, self.prompt_number, 2, self.len_prompt, self.backbone.num_features), requires_grad=True)
         self.val_prototypes = nn.Parameter(torch.randn(self.class_num, self.num_centroids, self.backbone.num_features), requires_grad=False)
 
         self.mlp_layers = nn.Sequential(
             nn.Linear(self.backbone.num_features, 2048),
-            nn.ReLU(inplace = True),
+            nn.GELU(),
             nn.Linear(2048, 2048),
-            nn.ReLU(inplace = True),
+            nn.GELU(),
             nn.Linear(2048, self.backbone.num_features),
         )
 
@@ -49,60 +49,61 @@ class CPP(L2P):
         self.task_id = -1 # if _convert_train_task is not called, task will undefined
 
     def pre_forward(self, dataloader : DataLoader, **kwargs) -> torch.Tensor:
+
+        nn.init.ones_(self.mlp_layers[0].weight)
+        nn.init.zeros_(self.mlp_layers[0].bias)
+        nn.init.ones_(self.mlp_layers[2].weight)
+        nn.init.zeros_(self.mlp_layers[2].bias)
+        nn.init.ones_(self.mlp_layers[4].weight)
+        nn.init.zeros_(self.mlp_layers[4].bias)
         
-        self.mlp_layers[0].reset_parameters() 
-        self.mlp_layers[2].reset_parameters() 
-        self.mlp_layers[4].reset_parameters() 
+        with torch.no_grad():
+            embedding_buffer = torch.empty((0, self.backbone.num_features), device=self.prompt.device)
+            class_buffer     = torch.empty((0,), device = self.prompt.device, dtype=torch.long)
 
-        embedding_buffer = torch.empty((0, self.backbone.num_features), device=self.prompt.device)
-        class_buffer     = torch.empty((0,), device = self.prompt.device, dtype=torch.long)
+            for i, (x, y) in enumerate(dataloader):
+                x = x.to(self.prompt.device)
+                y = y.to(self.prompt.device)
+                
+                x = self.backbone.patch_embed(x)
+                B, N, C = x.size()
+                x = self.embedding(x)
 
-        for i, (x, y) in enumerate(dataloader):
-            x = x.to(self.prompt.device)
-            y = y.to(self.prompt.device)
-            
-            x = self.backbone.patch_embed(x)
-            B, N, C = x.size()
-            x = self.embedding(x)
+                embedding_buffer = torch.cat((embedding_buffer, x), dim = 0)
+                class_buffer     = torch.cat((class_buffer, y), dim = 0)
 
-            embedding_buffer = torch.cat((embedding_buffer, x), dim = 0)
-            class_buffer     = torch.cat((class_buffer, y), dim = 0)
-
-        unique = class_buffer.unique()
-        for c in unique:
-            embeddings = embedding_buffer[class_buffer == c]
-            simmilarity_matrix = torch.cosine_similarity(embeddings.unsqueeze(1), embeddings.unsqueeze(0), dim = -1)
-            eig = torch.linalg.eigh(torch.diag(simmilarity_matrix.sum(dim=0)) - simmilarity_matrix, UPLO='U')[1][:,1:self.num_centroids]
-            kmeans = KMeans(n_clusters=self.num_centroids).fit(eig)
-            for i in range(self.num_centroids):
-                self.key_prototypes[c][i] = embeddings[kmeans.labels_==i].mean(dim=0)
-
+            unique = class_buffer.unique()
+            for c in unique:
+                embeddings = embedding_buffer[class_buffer == c]
+                simmilarity_matrix = torch.cosine_similarity(embeddings.unsqueeze(1), embeddings, dim = -1)
+                eig = torch.linalg.eigh(torch.diag(simmilarity_matrix.sum(dim=0)) - simmilarity_matrix, UPLO='U')[1][:,1:self.num_centroids]
+                kmeans = KMeans(n_clusters=self.num_centroids).fit(eig)
+                for i in range(self.num_centroids):
+                    self.key_prototypes[c][i] = embeddings[kmeans.labels_==i].mean(dim=0)
     def post_forward(self, dataloader : DataLoader, **kwargs) -> torch.Tensor:
 
-        embedding_buffer = torch.empty((0, self.backbone.num_features), device=self.prompt.device)
-        class_buffer     = torch.empty((0,), device = self.prompt.device, dtype=torch.long)
+        with torch.no_grad():
+            embedding_buffer = torch.empty((0, self.backbone.num_features), device=self.prompt.device)
+            class_buffer     = torch.empty((0,), device = self.prompt.device, dtype=torch.long)
 
-        for i, (x, y) in enumerate(dataloader):
-            x = x.to(self.prompt.device)
-            y = y.to(self.prompt.device)
-            prompt = self.prompt[y].clone()
-            x = self.backbone.patch_embed(x)
-            B, N, C = x.size()
+            for i, (x, y) in enumerate(dataloader):
+                x = x.to(self.prompt.device)
+                y = y.to(self.prompt.device)
+                prompt = self.prompt[y].clone()
+                x = self.backbone.patch_embed(x)
+                B, N, C = x.size()
 
-            emb = torch.empty((0, self.backbone.num_features), device=self.prompt.device)
-            for i in range(B):
-                emb = torch.cat((emb, self.embedding(x[i:i+1].unsqueeze(0), prompt[i:i+1])), dim = 0)
-            embedding_buffer = torch.cat((embedding_buffer, x), dim = 0)
-            class_buffer     = torch.cat((class_buffer, y), dim = 0)
+                embedding_buffer = torch.cat((embedding_buffer, self.embedding(x, prompt)), dim = 0)
+                class_buffer     = torch.cat((class_buffer, y), dim = 0)
 
-        unique = class_buffer.unique()
-        for c in unique:
-            embeddings = embedding_buffer[class_buffer == c]
-            simmilarity_matrix = torch.cosine_similarity(embeddings.unsqueeze(1), embeddings.unsqueeze(0), dim = -1)
-            eig = torch.linalg.eigh(torch.diag(simmilarity_matrix.sum(dim=0)) - simmilarity_matrix, UPLO='U')[1][:,1:self.num_centroids]
-            kmeans = KMeans(n_clusters=self.num_centroids).fit(eig)
-            for i in range(self.num_centroids):
-                self.val_prototypes[c][i] = embeddings[kmeans.labels_==i].mean(dim=0)
+            unique = class_buffer.unique()
+            for c in unique:
+                embeddings = embedding_buffer[class_buffer == c]
+                simmilarity_matrix = torch.cosine_similarity(embeddings.unsqueeze(1), embeddings, dim = -1)
+                eig = torch.linalg.eigh(torch.diag(simmilarity_matrix.sum(dim=0)) - simmilarity_matrix, UPLO='U')[1][:,1:self.num_centroids]
+                kmeans = KMeans(n_clusters=self.num_centroids).fit(eig)
+                for i in range(self.num_centroids):
+                    self.val_prototypes[c][i] = embeddings[kmeans.labels_==i].mean(dim=0)
 
     def forward(self, inputs : torch.Tensor) :
 
@@ -115,10 +116,11 @@ class CPP(L2P):
 
         else:
             emb = self.embedding(x)
-            simmilarity = torch.cosine_similarity(emb.unsqueeze(1), self.key_prototypes.reshape(-1, C).unsqueeze(0), dim = -1)
+
+            simmilarity = 1 - torch.cosine_similarity(emb.unsqueeze(1), self.key_prototypes.reshape(-1, C), dim = -1)
             topk, idx = simmilarity.topk(self.num_neighbors, dim = -1, largest = False, sorted = True)
             idx = idx // self.num_centroids
-            prompt = self.prompt[idx]
+            prompt = self.prompt[idx].clone()
 
             prompt = prompt.view(B, self.num_neighbors, self.prompt_number, 2, self.len_prompt, C)
             prompt = prompt.reshape(-1, self.prompt_number, 2, self.len_prompt, C)
@@ -128,15 +130,17 @@ class CPP(L2P):
             for i in range(self.num_neighbors):
                 y = torch.cat((y, self.embedding(x[i*B:(i+1)*B], prompt[i*B:(i+1)*B])), dim = 0)
 
+            y = y.reshape(B, self.num_neighbors, self.backbone.num_features)
             # Class prediction
             # B * C, D
             # C * CC, D
-            simmilarity = F.cosine_similarity(y.unsqueeze(1), self.val_prototypes.reshape(-1, C).unsqueeze(0), dim = -1).reshape(B, self.num_neighbors, self.class_num, self.num_centroids)
-            argmin = simmilarity.min(dim = -1).values.min(dim = 1).values.argmin(dim = 1)
-            print(argmin)
-            answer = torch.zeros((B,N), device = inputs.device)
-            answer[torch.arange(B), argmin] = 1
             
+            argmin = torch.empty((0,), device = inputs.device, dtype=torch.long)
+            for i in range(B):
+                simmilarity = 1 - F.cosine_similarity(y[i].unsqueeze(1), self.val_prototypes[idx[i]].reshape(-1, C), dim = -1).reshape(self.num_neighbors, self.num_neighbors, self.num_centroids)
+                argmin = torch.cat((argmin, simmilarity.min(dim=-1).values.min(dim=-1).values.min(dim=-1).values.argmin().unsqueeze(0)), dim=0)
+            answer = torch.zeros((B,N), device = inputs.device)
+            answer[torch.arange(B), idx[torch.arange(B), argmin]] = 1
             return answer
 
     def embedding(self, x : torch.Tensor, prompt : torch.Tensor = None, **kwargs) -> torch.Tensor:
@@ -154,6 +158,7 @@ class CPP(L2P):
             x = self.backbone.pos_drop(t + self.backbone.pos_embed)
             prompt = prompt + self.backbone.pos_embed[:,:1,:].unsqueeze(1).unsqueeze(1).expand(prompt.size(0), -1, prompt.size(2), prompt.size(3), -1)
             for n, block in enumerate(self.backbone.blocks):
+
                 xq = block.norm1(x)
                 xk = xq.clone()
                 xv = xq.clone()
@@ -180,8 +185,8 @@ class CPP(L2P):
                 attention = attn.proj(attention)
                 attention = attn.proj_drop(attention)
 
-                x = x + block.drop_path(attention)
-                x = x + block.drop_path(block.mlp(block.norm2(x)))
+                x = x + block.drop_path1(block.ls1(attention))
+                x = x + block.drop_path2(block.ls2(block.mlp(block.norm2(x))))
             x = self.backbone.norm(x)[:, 0].clone()
             return x
 
@@ -212,17 +217,22 @@ class CPP(L2P):
             x = self.embedding(self.data_buffer, prompt)
             x = self.mlp_layers(x)
 
-            loss = 0
+            loss = torch.zeros(1, device=output.device)
+            past_cls = torch.empty((0, self.backbone.num_features), device=output.device)
+            for cls in self.tasks[:-1]:
+                for clss in cls:
+                    past_cls = torch.cat((past_cls, self.val_prototypes[clss].clone()))
+                
             for cls in self.tasks[-1]:
-                positive = x[target == cls].clone()
-                positive_sum = F.cosine_similarity(positive.unsqueeze(1), torch.cat((positive, self.key_prototypes[cls].clone())).unsqueeze(0), dim = -1).exp().sum()
+                in_class = x[target == cls].clone()
+                positive = torch.cat((in_class, self.key_prototypes[cls].clone()))
                 negative = x[target != cls].clone()
-                for past_cls in self.tasks[:-1]:
-                    for clss in past_cls:
-                        negative = torch.cat((negative, self.val_prototypes[clss].clone()), dim = 0)
-                negative_sum = F.cosine_similarity(positive.unsqueeze(1), negative.unsqueeze(0), dim = -1).exp().sum()
-                loss += -torch.log(positive_sum /(negative_sum + 1e-6) + 1e-6)
-            return loss / self.tasks[-1].size(0)
+                negative = torch.cat((negative, past_cls))
+
+                positive = (1 - F.cosine_similarity(in_class.unsqueeze(1), positive, dim=-1)).exp()
+                negative = (1 - F.cosine_similarity(in_class.unsqueeze(1), negative, dim=-1)).exp()
+                loss -= (positive / negative.sum()).clamp(1e-8).log().sum()
+            return loss / B
 
         else:
             return torch.zeros(1, device = output.device)

@@ -49,9 +49,9 @@ class L2P(nn.Module):
             _diversed_selection  = _diversed_selection,
             _batchwise_selection = _batchwise_selection)
 
-        self.register_buffer('simmilarity', torch.zeros(1))
-        self.register_buffer('unsimmilarity', torch.zeros(1))
-        self.register_buffer('mask', torch.zeros(class_num))
+        self.register_buffer('simmilarity', torch.zeros(1), persistent=False)
+        self.register_buffer('unsimmilarity', torch.zeros(1), persistent=False)
+        self.register_buffer('mask', torch.zeros(class_num), persistent=False)
     
     def forward(self, inputs : torch.Tensor, **kwargs) -> torch.Tensor:
 

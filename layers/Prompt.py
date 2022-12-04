@@ -2,7 +2,6 @@ import torch
 import torch.nn as nn
 import torch.nn.functional as F
 
-
 class Prompt(nn.Module):
     def __init__(self,
                  pool_size            : int,
@@ -29,7 +28,6 @@ class Prompt(nn.Module):
 
         self.register_buffer('frequency', torch.ones (pool_size))
         self.register_buffer('counter',   torch.zeros(pool_size))
-        self.register_buffer('topk', torch.zeros(1))
     
     def forward(self, query : torch.Tensor, **kwargs) -> torch.Tensor:
 
@@ -52,12 +50,11 @@ class Prompt(nn.Module):
             topk = idx[mosts].clone().expand(B, -1)
 
         # Frequency counter
-        self.counter += torch.bincount(topk.contiguous().view(-1), minlength = self.pool_size)
+        self.counter += torch.bincount(topk.reshape(-1).clone(), minlength = self.pool_size)
 
         # selected prompts
-        self.topk = topk
-        selection   = self.prompts.repeat(B, 1, 1, 1).gather(1, topk.unsqueeze(-1).unsqueeze(-1).expand(-1, -1, self.prompt_len, self.dimention).clone())
-        simmilarity   = match.gather(1, topk)
+        selection = self.prompts.repeat(B, 1, 1, 1).gather(1, topk.unsqueeze(-1).unsqueeze(-1).expand(-1, -1, self.prompt_len, self.dimention).clone())
+        simmilarity = match.gather(1, topk)
 
         # get unsimilar prompts also 
         return simmilarity, selection

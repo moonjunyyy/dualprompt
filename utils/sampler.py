@@ -134,7 +134,6 @@ class multiDatasetSampler(torch.utils.data.Sampler):
 
         for i in range(self.num_datasets):
             self.dataset.dataset_lengths[i]
-
         
         stale = len(self.dataset.classes) - len(self.dataset.classes) % self.num_tasks
 

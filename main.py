@@ -5,6 +5,9 @@ import time
 import multiprocessing as mp
 mp.set_start_method("spawn", force=True)
 
+import torch
+torch.autograd.set_detect_anomaly(True)
+
 from utils.args import parse_args
 from utils.trainer import Imgtrainer
 
@@ -35,6 +38,8 @@ def vit_base_patch16_224_l2p(pretrained=False, **kwargs):
 os.environ['WANDB_AGENT_MAX_INITIAL_FAILURES'] = '100'
 os.environ['WANDB_API_KEY']='248bc1773e3aafd753ce7429527187cbb0dd53cd'
 os.environ['TORCH_DISTRIBUTED_DEBUG'] = 'DETAIL'
+
+
 
 # MAIN FUNCTION
 def main(args):
