@@ -4,6 +4,7 @@ from typing import Callable, Optional
 
 from torch.utils.data import Dataset
 from torchvision.datasets import FashionMNIST
+from torchvision.transforms import transforms
 
 class FashionMNIST(Dataset):
     def __init__(
@@ -16,7 +17,7 @@ class FashionMNIST(Dataset):
     ) -> None:
 
         super().__init__()
-        self.dataset = FashionMNIST(root, train, transform, target_transform, download)
+        self.dataset = FashionMNIST(root, train, transforms.ToTensor() if transform is None else transform, target_transform, download)
         
         self.classes = [str(i) for i in range(10)]
         self.targets = []

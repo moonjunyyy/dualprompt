@@ -4,6 +4,7 @@ from typing import Callable, Optional
 
 from torch.utils.data import Dataset
 from torchvision.datasets import Flowers102
+from torchvision.transforms import transforms
 
 class Flowers102(Dataset):
     def __init__(
@@ -16,7 +17,7 @@ class Flowers102(Dataset):
     ) -> None:
 
         super().__init__()
-        self.dataset = Flowers102(root, "train" if train else "test", transform, target_transform, download)
+        self.dataset = Flowers102(root, "train" if train else "test", transforms.ToTensor() if transform is None else transform, target_transform, download)
         
         self.classes = [str(i) for i in range(102)]
         self.targets = []

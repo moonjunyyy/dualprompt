@@ -3,6 +3,7 @@ from typing import Callable, Optional
 import torch
 from torch.utils.data import Dataset, random_split
 from torchvision.datasets import ImageFolder
+from torchvision.transforms import transforms
 
 class NotMNIST(Dataset):
     def __init__(self, 
@@ -13,7 +14,7 @@ class NotMNIST(Dataset):
                  download         : bool = False
                  ) -> None:
         super().__init__()
-        self.dataset = ImageFolder(root + '/notMNIST_large/', transform, target_transform)
+        self.dataset = ImageFolder(root + '/notMNIST_large/', transforms.ToTensor() if transform is None else transform, target_transform)
         len_train    = int(len(self.dataset) * 0.8)
         len_val      = len(self.dataset) - len_train
         train, test  = random_split(self.dataset, [len_train, len_val], generator=torch.Generator().manual_seed(42))

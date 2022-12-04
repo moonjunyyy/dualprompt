@@ -1,9 +1,6 @@
 from typing import Callable, Optional
 
-import os
-import torch
-from torch.utils.data import Dataset, random_split
-from torchvision.datasets import ImageFolder, ImageNet
+from torchvision.datasets import ImageFolder
 import torchvision.transforms as transforms
 
 class grayTinyImageNet(ImageFolder):
@@ -17,7 +14,7 @@ class grayTinyImageNet(ImageFolder):
         self.path = root + '/tiny-imagenet-200/'
 
         if train:
-            super().__init__(self.path + "train", transform=transform, target_transform=target_transform)
+            super().__init__(self.path + "train", transform=transforms.ToTensor() if transform is None else transform, target_transform=target_transform)
             self.classes = []
             with open(self.path + "wnids.txt", 'r') as f:
                 for id in f.readlines():
@@ -29,7 +26,7 @@ class grayTinyImageNet(ImageFolder):
                 self.targets.append(self.class_to_idx[path.split("/")[-3]])
 
         else:
-            super().__init__(self.path + "val", transform=transform, target_transform=target_transform)
+            super().__init__(self.path + "val", transform=transforms.ToTensor() if transform is None else transform, target_transform=target_transform)
             self.classes = []
             with open(self.path + "wnids.txt", 'r') as f:
                 for id in f.readlines():
